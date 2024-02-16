@@ -71,42 +71,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
 
     env.close()
 
-def train_waterworld_parallel(env_fn, model_name, model_subdir, run_id, steps=100_000, seed=None, **hyperparam_kwargs):
-    # Convert specific hyperparameters to int if necessary
-    for key in ['n_steps', 'batch_size', 'buffer_size']:
-        if key in hyperparam_kwargs:
-            hyperparam_kwargs[key] = int(hyperparam_kwargs[key])
-    
-    env = env_fn.parallel_env(**env_kwargs)
-    env.reset(seed=seed)
-    
-    print(f"[{run_id}] Starting training on {str(env.metadata['name'])}.")
-    env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 8, num_cpus=2, base_class="stable_baselines3")
 
-    model = None
-    if model_name == "PPO":
-        model = PPO(PPOMlpPolicy, env, verbose=3, **hyperparam_kwargs)
-    elif model_name == "SAC":
-        model = SAC(SACMlpPolicy, env, verbose=3, **hyperparam_kwargs)
-    else:
-        raise ValueError(f"[{run_id}] Invalid model name: {model_name}")
-
-    start_time = datetime.datetime.now()
-    model.learn(total_timesteps=steps)
-
-    # Save model with run_id in the name to avoid conflicts
-    model_dir_path = os.path.join(MODEL_DIR, model_subdir, run_id)
-    os.makedirs(model_dir_path, exist_ok=True)
-    model_path = os.path.join(model_dir_path, f"{env.unwrapped.metadata.get('name')}_{run_id}.zip")
-    model.save(model_path)
-    print(f"[{run_id}] Model saved to {model_path}")
-
-    end_time = datetime.datetime.now()
-    duration = end_time - start_time
-    print(f"[{run_id}] Training duration: {duration}")
-
-    env.close()
 
 def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=None):
     env = env_fn.env(render_mode=render_mode, **env_kwargs)
@@ -205,15 +170,28 @@ def run_train():
     # still arbitrary episodes and episode lengths
     episodes, episode_lengths = 2, 98304
     total = episode_lengths*episodes
-
-    # Train the waterworld environment with the specified model and settings
-    train_waterworld(env_fn, mdl, TRAIN_DIR, steps=total, seed=0)
+        
+    # Specify the hyperparameters
+    hyperparam_kwargs = {
+        'learning_rate': 0.0008637620730511329,
+        'batch_size': 115.73571005105222,
+        'gamma': 0.8,
+        'gae_lambda': 0.9087173146398605,
+        'n_steps': 1024,
+        'ent_coef': 0.00010643155693475564,
+        'vf_coef': 0.9533843157531028,
+        'max_grad_norm': 6.051664754689212,
+        'clip_range': 0.7697781042380724
+    }
+    
+    # Train the waterworld environment with the specified model, settings, and hyperparameters
+    train_waterworld(env_fn, mdl, TRAIN_DIR, steps=total, seed=0, **hyperparam_kwargs)
     
     # Evaluate the trained model against a random agent for 10 games without rendering
     eval(env_fn, mdl, num_games=10, render_mode=None)
     
     # Evaluate the trained model against a random agent for 1 game with rendering
-    #eval(env_fn, mdl, num_games=1, render_mode="human")
+    eval(env_fn, mdl, num_games=1, render_mode="human")
     
 def run_eval():
     # Evaluate the trained model against a random agent for 10 games without rendering
@@ -227,14 +205,14 @@ def quick_test():
     train_waterworld(env_fn, mdl, TRAIN_DIR, steps=1, seed=0)
     
     # Evaluate the trained model against a random agent for 10 games without rendering
-    eval(env_fn, mdl, num_games=2, render_mode=None)
+    eval(env_fn, mdl, num_games=10, render_mode=None)
     
     # Evaluate the trained model against a random agent for 1 game with rendering
     eval(env_fn, mdl, num_games=1, render_mode="human")
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'qt'  # Choose "train", "optimize", "optimize_parallel" or "eval"
+    process_to_run = 'train'  # Choose "train", "optimize", "optimize_parallel" or "eval"
     mdl = "PPO"# Choose "Heuristic", "PPO" or "SAC"
     
     # security check
@@ -253,16 +231,16 @@ if __name__ == "__main__":
             generations=20
         )
         print("Best Hyperparameters:", best_hyperparams)
-    elif process_to_run == 'optimize_parallel':
-        optimizer = GeneticHyperparamOptimizer(model_name=mdl)
-        best_hyperparams = optimizer.run_parallel(
-            train_waterworld_parallel,  
-            eval, 
-            env_fn, 
-            population_size=4,
-            generations=4
-        )
-        print("Best Hyperparameters:", best_hyperparams)
+    # elif process_to_run == 'optimize_parallel':
+    #     optimizer = GeneticHyperparamOptimizer(model_name=mdl)
+    #     best_hyperparams = optimizer.run_parallel(
+    #         train_waterworld_parallel,  
+    #         eval, 
+    #         env_fn, 
+    #         population_size=4,
+    #         generations=4
+    #     )
+    #     print("Best Hyperparameters:", best_hyperparams)
     
     elif process_to_run == 'eval':
         run_eval()
@@ -270,4 +248,4 @@ if __name__ == "__main__":
         quick_test()
         
 
-    
+    # INFO:root:Evaluating Individual: {'learning_rate': 0.0008637620730511329, 'batch_size': 115.73571005105222, 'gamma': 0.8, 'gae_lambda': 0.9087173146398605, 'n_steps': 1024, 'ent_coef': 0.00010643155693475564, 'vf_coef': 0.9533843157531028, 'max_grad_norm': 6.051664754689212, 'clip_range': 0.7697781042380724}, Avg Reward: 235.44880737923336
