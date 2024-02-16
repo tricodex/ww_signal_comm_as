@@ -5,13 +5,13 @@ env_kwargs = {
     "n_evaders": 4,  # number of food objects
     "n_poisons": 10,  # number of poison objects
     "n_coop": 2,  # number of pursuing archea (agents) that must be touching food at the same time to consume it
-    "n_sensors": 1,  # number of sensors on all pursuing archea (agents), 30 max
+    "n_sensors": 4,  # number of sensors on all pursuing archea (agents), 30 max
     "sensor_range": 0.2,  # length of sensor dendrite on all pursuing archea (agents)
     "radius": 0.015,  # archea base radius. Pursuer: radius, food: 2 x radius, poison: 3/4 x radius
     "obstacle_radius": 0.05,  # radius of obstacle object
     "n_obstacles": 1,  # number of obstacle objects
     "obstacle_coord": [(0.5, 0.5)], #, (0.25, 0.25), (0.75, 0.75), (0.25, 0.75), (0.75, 0.25)],  # coordinate of obstacle objects
-    "pursuer_max_accel": 0.01,  # pursuer archea maximum acceleration (maximum action size)
+    "pursuer_max_accel": 0.1,  # pursuer archea maximum acceleration (maximum action size) org: 0.01
     "evader_speed": 0.01,  # food speed
     "poison_speed": 0.01,  # poison speed
     "poison_reward": -1.0,  # reward for pursuer consuming a poison object (typically negative)
@@ -20,7 +20,7 @@ env_kwargs = {
     "thrust_penalty": 0,#-0.5,  # scaling factor for the negative reward used to penalize large actions
     "local_ratio": 0.0,  # Proportion of reward allocated locally vs distributed globally among all agents (vs 1.0)
     "speed_features": True,  # toggles whether pursuing archea (agent) sensors detect speed of other objects and archea
-    "max_cycles": 9830  # After max_cycles steps all agents will return done; maybe 98304?
+    "max_cycles": 983  # After max_cycles steps all agents will return done; maybe 98304?
 }
 
 # Hyperparameter space for PPO
