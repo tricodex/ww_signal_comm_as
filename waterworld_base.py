@@ -421,7 +421,7 @@ class WaterworldBase:
 
         # Process communication
         p.communication_signal = communication_action
-        print(f'This is comm signal {p.communication_signal} for agent {agent_id}.' )
+        print(f'Signal:{p.communication_signal}:P{agent_id}.' )
 
         # Penalize large thrusts
         accel_penalty = self.thrust_penalty * thrust
