@@ -166,32 +166,35 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
     return avg_reward
 
 # Train a model
-def run_train():
+def run_train(ppos=True):
     # still arbitrary episodes and episode lengths
     episodes, episode_lengths = 2, 98304
     total = episode_lengths*episodes
-        
-    # Specify the hyperparameters
-    hyperparam_kwargs = {
-        'learning_rate': 0.0008637620730511329,
-        'batch_size': 115.73571005105222,
-        'gamma': 0.8,
-        'gae_lambda': 0.9087173146398605,
-        'n_steps': 1024,
-        'ent_coef': 0.00010643155693475564,
-        'vf_coef': 0.9533843157531028,
-        'max_grad_norm': 6.051664754689212,
-        'clip_range': 0.7697781042380724
-    }
+    
+    if ppos == True:    
+        # Specify the hyperparameters
+        hyperparam_kwargs = {
+            'learning_rate': 0.0008637620730511329,
+            'batch_size': 115.73571005105222,
+            'gamma': 0.8,
+            'gae_lambda': 0.9087173146398605,
+            'n_steps': 1024,
+            'ent_coef': 0.00010643155693475564,
+            'vf_coef': 0.9533843157531028,
+            'max_grad_norm': 6.051664754689212,
+            'clip_range': 0.7697781042380724
+        }
+    else:
+        hyperparam_kwargs ={}
     
     # Train the waterworld environment with the specified model, settings, and hyperparameters
     train_waterworld(env_fn, mdl, TRAIN_DIR, steps=total, seed=0, **hyperparam_kwargs)
     
     # Evaluate the trained model against a random agent for 10 games without rendering
-    eval(env_fn, mdl, num_games=10, render_mode=None)
+    eval(env_fn, mdl, num_games=5, render_mode=None)
     
     # Evaluate the trained model against a random agent for 1 game with rendering
-    eval(env_fn, mdl, num_games=1, render_mode="human")
+    eval(env_fn, mdl, num_games=5, render_mode="human")
     
 def run_eval():
     # Evaluate the trained model against a random agent for 10 games without rendering
@@ -213,14 +216,14 @@ def quick_test():
 if __name__ == "__main__":
     env_fn = waterworld_v4  
     process_to_run = 'train'  # Choose "train", "optimize", "optimize_parallel" or "eval"
-    mdl = "PPO"# Choose "Heuristic", "PPO" or "SAC"
+    mdl = "SAC"# Choose "Heuristic", "PPO" or "SAC"
     
     # security check
     if mdl == "Heuristic":
         process_to_run = 'eval'
 
     if process_to_run == 'train':
-        run_train()
+        run_train(ppos=False)
     elif process_to_run == 'optimize':
         optimizer = GeneticHyperparamOptimizer(model_name=mdl)
         best_hyperparams = optimizer.run(
