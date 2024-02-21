@@ -36,7 +36,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     
     print(f"Starting training on {str(env.metadata['name'])}.")
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 8, num_cpus=2, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 20, num_cpus=2, base_class="stable_baselines3") # [1]=8
 
     # # Specify the file path for Monitor to save data
     # monitor_dir = "./monitors/"  
@@ -96,6 +96,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
             env.reset(seed=i)
             for agent in env.agent_iter():
                 obs, reward, termination, truncation, info = env.last()
+                #print(info)
                 for a in env.agents:
                     rewards[a] += env.rewards[a]
 
@@ -116,8 +117,6 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
                 obs, reward, termination, truncation, info = env.last()
                 for a in env.agents:
                     rewards[a] += env.rewards[a]
-
-                    
                 
                 if termination or truncation:
                     action = None
@@ -168,7 +167,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 # Train a model
 def run_train(ppos=True):
     # still arbitrary episodes and episode lengths
-    episodes, episode_lengths = 2, 98304
+    episodes, episode_lengths = 1, 98304
     total = episode_lengths*episodes
     
     if ppos == True:    
@@ -191,10 +190,10 @@ def run_train(ppos=True):
     train_waterworld(env_fn, mdl, TRAIN_DIR, steps=total, seed=0, **hyperparam_kwargs)
     
     # Evaluate the trained model against a random agent for 10 games without rendering
-    eval(env_fn, mdl, num_games=5, render_mode=None)
+    eval(env_fn, mdl, num_games=1, render_mode=None)
     
     # Evaluate the trained model against a random agent for 1 game with rendering
-    eval(env_fn, mdl, num_games=5, render_mode="human")
+    eval(env_fn, mdl, num_games=1, render_mode="human")
     
 def run_eval():
     # Evaluate the trained model against a random agent for 10 games without rendering
@@ -234,21 +233,9 @@ if __name__ == "__main__":
             generations=20
         )
         print("Best Hyperparameters:", best_hyperparams)
-    # elif process_to_run == 'optimize_parallel':
-    #     optimizer = GeneticHyperparamOptimizer(model_name=mdl)
-    #     best_hyperparams = optimizer.run_parallel(
-    #         train_waterworld_parallel,  
-    #         eval, 
-    #         env_fn, 
-    #         population_size=4,
-    #         generations=4
-    #     )
-    #     print("Best Hyperparameters:", best_hyperparams)
     
     elif process_to_run == 'eval':
         run_eval()
     elif process_to_run == 'qt':
         quick_test()
         
-
-    # INFO:root:Evaluating Individual: {'learning_rate': 0.0008637620730511329, 'batch_size': 115.73571005105222, 'gamma': 0.8, 'gae_lambda': 0.9087173146398605, 'n_steps': 1024, 'ent_coef': 0.00010643155693475564, 'vf_coef': 0.9533843157531028, 'max_grad_norm': 6.051664754689212, 'clip_range': 0.7697781042380724}, Avg Reward: 235.44880737923336
