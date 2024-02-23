@@ -87,6 +87,10 @@ class raw_env(AECEnv, EzPickle):
         agent = self.agent_selection
         is_last = self._agent_selector.is_last()
         self.env.step(action, self.agent_name_mapping[agent], is_last)
+        
+        # # Add communication data to the info dictionary for the current agent
+        # self.infos[agent]["communication_data"] = self.env.communication_data
+
 
         for r in self.rewards:
             self.rewards[r] = self.env.control_rewards[self.agent_name_mapping[r]]
@@ -105,10 +109,21 @@ class raw_env(AECEnv, EzPickle):
 
         if self.render_mode == "human":
             self.render()
+            
+    # def get_communication_data(self, agent):
+    #     if self.has_reset:
+    #         agent_id = self.agent_name_mapping[agent]
+    #         return self.env.communication_data
+    #     else:
+    #         return None
 
     def observe(self, agent):
         return self.env.observe(self.agent_name_mapping[agent])
     
+    
+    def get_communication_data(self):
+        """Retrieve communication data from the environment."""
+        return self.env.communication_data
     
 """
 # Waterworld
