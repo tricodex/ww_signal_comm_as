@@ -9,6 +9,7 @@ import pymunk
 from gymnasium import spaces
 from gymnasium.utils import seeding
 from scipy.spatial import distance as ssd
+from datetime import datetime
 
 from waterworld_models import (
     Evaders,
@@ -18,6 +19,8 @@ from waterworld_models import (
 )
 
 FPS = 15
+
+
 
 
 class WaterworldBase:
@@ -97,6 +100,10 @@ class WaterworldBase:
         self.screen = None
         self.frames = 0
         self.num_agents = self.n_pursuers
+        
+        self.communication_data = []
+        
+        
         self.get_spaces()
         self._seed()
 
@@ -398,6 +405,10 @@ class WaterworldBase:
         self.last_obs = obs_list
 
         return obs_list[0]
+    
+
+    
+
 
     def step(self, action, agent_id, is_last):
         # Extract movement and communication components from the action
@@ -421,7 +432,8 @@ class WaterworldBase:
 
         # Process communication
         p.communication_signal = communication_action
-        print(f'Signal:{p.communication_signal}:P{agent_id}.' )
+        #print(f'Signal:{p.communication_signal}:P{agent_id}.' )
+        # self.communication_data.append((p.communication_signal, agent_id))
 
         # Penalize large thrusts
         accel_penalty = self.thrust_penalty * thrust
@@ -741,3 +753,5 @@ class WaterworldBase:
             if self.render_mode == "rgb_array"
             else None
         )
+
+
