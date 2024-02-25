@@ -228,7 +228,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 # Train a model
 def run_train(ppos=True, sacs=False):
     # still arbitrary episodes and episode lengths
-    episodes, episode_lengths = 250, 98304
+    episodes, episode_lengths = 3, 98304
     total = episode_lengths*episodes
     
     if ppos == True:    
@@ -267,7 +267,7 @@ def run_train(ppos=True, sacs=False):
     eval(env_fn, mdl, num_games=10, render_mode=None)
     
     # Evaluate the trained model against a random agent for 1 game with rendering
-    # eval(env_fn, mdl, num_games=1, render_mode="human")
+    eval(env_fn, mdl, num_games=1, render_mode="human")
     
 def run_eval():
     # Evaluate the trained model against a random agent for 10 games without rendering
@@ -292,7 +292,7 @@ def quick_test():
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'optimize'  # Choose "train", "optimize" or "eval"
+    process_to_run = 'train'  # Choose "train", "optimize" or "eval"
     mdl = "PPO"# Choose "Heuristic", "PPO" or "SAC"
     
     # security check
@@ -300,7 +300,7 @@ if __name__ == "__main__":
         process_to_run = 'eval_path'
 
     if process_to_run == 'train':
-        run_train(ppos=False, sacs=True)
+        run_train()#ppos=False, sacs=True)
     elif process_to_run == 'optimize':
         optimizer = GeneticHyperparamOptimizer(model_name=mdl)
         best_hyperparams = optimizer.run(
