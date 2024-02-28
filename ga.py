@@ -13,11 +13,13 @@ OPTIMIZE_DIR = 'optimize'
 
 class GeneticHyperparamOptimizer:
     def __init__(self, model_name):
-        logging.basicConfig(filename='genetic_algo.log', level=logging.INFO)
+        current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        logging.basicConfig(filename=f'logs/genetic_algo_{current_time}.log', level=logging.INFO)
         self.model_name = model_name
 
         # Add current datetime to logging
-        current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
         logging.info(f"Current datetime: {current_datetime}")
 
         # Select hyperparameter space based on model name
@@ -107,7 +109,7 @@ class GeneticHyperparamOptimizer:
         train_function(env_fn, self.model_name, OPTIMIZE_DIR, steps=196_608, seed=0, **hyperparams)
 
         # Evaluate the trained model
-        avg_reward = eval_function(env_fn, self.model_name, model_subdir=OPTIMIZE_DIR, num_games=10 )
+        avg_reward = eval_function(env_fn, self.model_name, model_subdir=OPTIMIZE_DIR, num_games=3 )
         logging.info(f"Evaluating Individual: {individual}, Avg Reward: {avg_reward}")
         # Add fitness score to the individual
         individual['fitness'] = avg_reward
@@ -153,74 +155,7 @@ class GeneticHyperparamOptimizer:
         self.plot_performance(best_scores)
         return sorted_population[0]
     
-    def run_parallel(self, train_function, eval_function, env_fn, population_size=10, generations=5, elitism_size=2):
-        population = [self.generate_individual() for _ in range(population_size)]
-        
-        for generation in range(generations):
-            print(f"Starting Generation {generation + 1}")
-
-            # Evaluate all individuals in the population in parallel
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                futures = []
-                for individual in population:
-                    run_id = f"gen{generation}_indiv{population.index(individual)}"
-                    future = executor.submit(self.evaluate_parallel, individual, train_function, eval_function, env_fn, run_id)
-                    futures.append(future)
-
-                results = [future.result() for future in futures]
-
-            # Associate each individual with its fitness score
-            for individual, fitness in zip(population, results):
-                individual['fitness'] = fitness
-
-            # Sort the population based on fitness in descending order
-            population.sort(key=lambda ind: ind['fitness'], reverse=True)
-
-            # Elitism - carry over some best individuals to the next generation
-            next_generation = population[:elitism_size]
-
-            # Crossover and mutation for the rest of the next generation
-            while len(next_generation) < population_size:
-                parent1, parent2 = random.sample(population, 2)
-                child = self.crossover(parent1, parent2)
-                child = self.mutate(child)
-                next_generation.append(child)
-
-            population = next_generation
-            print(f"Generation {generation + 1} Complete. Best Score: {population[0]['fitness']}")
-
-        return population[0]  # Return the best individual
     
-    def evaluate_parallel(self, individual, train_function, eval_function, env_fn, run_id):
-        # Select hyperparameters based on the model
-        if self.model_name == "PPO":
-            # Filter out only those hyperparameters that are relevant for PPO
-            ppo_params = {k: individual[k] for k in individual if k in hyperparam_space_ppo}
-            hyperparams = ppo_params
-            if 'buffer_size' in hyperparams:
-                hyperparams['buffer_size'] = int(hyperparams['buffer_size'])
-            if 'n_steps' in hyperparams:
-                hyperparams['n_steps'] = int(hyperparams['n_steps'])
-            if 'batch_size' in hyperparams:
-                hyperparams['batch_size'] = int(hyperparams['batch_size'])
-        elif self.model_name == "SAC":
-            # Filter out only those hyperparameters that are relevant for SAC
-            sac_params = {k: individual[k] for k in individual if k in hyperparam_space_sac}
-            hyperparams = sac_params
-            hyperparams['buffer_size'] = int(hyperparams['buffer_size'])
-        else:
-            raise ValueError("Invalid model name")
-
-        # Pass the relevant hyperparameters to the train function, including run_id
-        train_function(env_fn, self.model_name, OPTIMIZE_DIR, run_id, steps=196_608, seed=0, **hyperparams)
-
-        # Evaluate the trained model
-        avg_reward = eval_function(env_fn, self.model_name, model_subdir=OPTIMIZE_DIR, run_id=run_id, num_games=10)
-        logging.info(f"[{run_id}] Evaluating Individual: {individual}, Avg Reward: {avg_reward}")
-
-        return avg_reward
-
-
 
     def plot_performance(self, best_scores):
         plt.plot(best_scores)
