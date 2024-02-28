@@ -130,7 +130,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
        
     print(f"Starting training on {str(env.metadata['name'])}.")
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 20, num_cpus=6, base_class="stable_baselines3") # [1]=8
+    env = ss.concat_vec_envs_v1(env, 32, num_cpus=6, base_class="stable_baselines3") # [1]=8
     
     policy_kwargs_sac = {
         "net_arch": {
@@ -721,7 +721,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 100000, 1000
+    episodes, episode_lengths = 200000, 1000
     total_steps = episodes * episode_lengths
     
     
@@ -787,7 +787,7 @@ def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\fine_tu
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'eval_path'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
+    process_to_run = 'train'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
     model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
