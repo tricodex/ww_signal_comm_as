@@ -29,6 +29,8 @@ from gym import spaces
 from torch import nn
 import numpy as np
 
+from analysis import Analysis
+
 MODEL_DIR = 'models'
 TRAIN_DIR = 'train'
 OPTIMIZE_DIR = 'optimize'
@@ -577,6 +579,35 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
     
     mutual_information = calculate_mutual_information(communication_agent_1, communication_agent_2)
     print(f'Mutual Information between two communication signals: {mutual_information}')
+    
+    
+
+    
+    # actions_array = np.array(actions)  # Convert your dataset to a numpy array
+
+    # # Instantiate the Analysis class with your actions array
+    # analysis = Analysis(actions_array)
+
+    # # Perform mutual information calculation between all pairs of agents
+    # analysis.calculate_mutual_info_results()
+
+    # # Print mutual information results to console
+    # analysis.print_mutual_info_results()
+
+    # # Optionally, save mutual information results to a file
+    # analysis.save_mutual_info_results(filepath='mutual_information_results.txt')
+
+    # # Plot various analyses and visualizations
+    # analysis.plot_movement_scatter(plot_name='movement_scatter_plot.png')
+    # analysis.plot_movement_communication_scatter(plot_name='movement_communication_scatter_plot.png')
+    # analysis.plot_pca_results(plot_name='pca_plot.png')
+    # analysis.plot_clustering_results(plot_name='clustering_plot.png')
+    # analysis.plot_residuals_vs_predicted(plot_name='residuals_vs_predicted_plot.png')
+    # analysis.plot_residuals_histogram(plot_name='residuals_histogram.png')
+    # analysis.plot_residuals_qq_plot(plot_name='residuals_qq_plot.png')
+
+    
+
 
     # Mutual Information
     # Here, a function to calculate mutual information is needed
