@@ -153,11 +153,22 @@ times the size of the pursuer radius, while food has a radius 2 times the size o
 globally to all pursuers, or applied locally to specific pursuers. The environment is a continuous 2D space, and each pursuer has a position with x and y values each in the range [0,1]. Agents can not move beyond barriers at the minimum and maximum x and y values. Agents act by choosing a thrust
 vector to add to their current velocity. Each pursuer has a number of evenly spaced sensors which can read the speed and direction of objects near the pursuer. This information is reported in the observation space, and can be used to navigate the environment.
 
+
+
+Key Features
+
+	Actions: Continuous, with each agent selecting a thrust vector for movement and continuous a signal value
+	Agents: 6 'pursuers' interact with food and poison entities.
+	API: Supports Parallel API for simultaneous agent actions.
+	Observation Space: Each agent has an extended observation vector that includes sensory data and communication signals from other agents.
+	Communication: Agents can emit and receive signals, adding a layer of strategy.
+
+
 ### Observation Space
 
-The observation shape of each agent is a vector of length > 4 that is dependent on the environment's input arguments. The full size of the vector is the number of features per sensor multiplied by the number of sensors, plus two elements indicating whether the pursuer collided with food or with
+The observation shape of each agent is a vector of length > 4+(n_pursuers-1) that is dependent on the environment's input arguments. The full size of the vector is the number of features per sensor multiplied by the number of sensors, plus two elements indicating whether the pursuer collided with food or with
 poison respectively. The number of features per sensor is 8 by default with `speed_features` enabled, or 5 if `speed_features` is turned off. Therefore with `speed_features` enabled, the observation shape takes the full form of `(8 × n_sensors) + 2`. Elements of the observation vector take on
-values in the range [-1, 1].
+values in the range [-1, 1]. and then there is a communication signal form each agent inside the observation space.
 
 For example, by default there are 5 agents (purple), 5 food targets (red) and 10 poison targets (green). Each agent has 30 range-limited sensors, depicted by the black lines, to detect neighboring entities (food and poison targets) resulting in 242 element vector of computed values about the
 environment for the observation space. These values represent the distances and speeds sensed by each sensor on the archea. Sensors that do not sense any objects within their range report 0 for speed and 1 for distance.
@@ -182,10 +193,10 @@ This table enumerates the observation space with `speed_features = True`:
 
 ### Action Space
 
-The agents have a continuous action space represented as a 2 element vector, which corresponds to horizontal and vertical thrust. The range of values depends on `pursuer_max_accel`.  Action values must be in the range `[-pursuer_max_accel, pursuer_max_accel]`. If the magnitude of this action
+The agents have a continuous action space represented as a 3 element vector, which corresponds to horizontal and vertical thrust and a communication signal. The range of values depends on `pursuer_max_accel`.  Action values must be in the range `[-pursuer_max_accel, pursuer_max_accel]`. If the magnitude of this action
 vector exceeds `pursuer_max_accel`, it will be scaled down to `pursuer_max_accel`. This velocity vector is added to the archea's current velocity.
 
-**Agent action space:** `[horizontal_thrust, vertical_thrust]`
+**Agent action space:** `[horizontal_thrust, vertical_thrust, communication_signal]`
 
 ### Rewards
 
