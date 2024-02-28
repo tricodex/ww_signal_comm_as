@@ -11,6 +11,7 @@ from scipy.signal import welch
 from scipy.stats import entropy
 import statsmodels.api as sm
 
+
 class Analysis:
     def __init__(self, actions_array):
         self.actions_array = actions_array
