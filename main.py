@@ -384,6 +384,222 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
     plot_name = f'movement_communication_scatter_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
     plt.savefig(f'plots/hvsi/{plot_name}')
     plt.show()
+    
+    from sklearn.linear_model import LinearRegression
+    from sklearn.decomposition import PCA
+    from sklearn.cluster import KMeans
+    from sklearn.preprocessing import StandardScaler
+    import pandas as pd
+    import statsmodels.api as sm
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    from scipy import stats
+    from scipy.signal import welch
+    from scipy.stats import entropy
+    from sklearn.metrics import mutual_info_score
+    from sklearn.preprocessing import KBinsDiscretizer
+    
+
+    # Convert to DataFrame for easier manipulation
+    df = pd.DataFrame(actions_array, columns=['Horizontal', 'Vertical', 'Communication', 'AgentID'])
+
+    # Regression Analysis: Predicting Horizontal Movement based on Communication Signal
+    X = df[['Communication']]  # Predictor variable
+    y = df['Horizontal']       # Response variable
+    regression_model = LinearRegression()
+    regression_model.fit(X, y)
+    df['Predicted_Horizontal'] = regression_model.predict(X)
+
+    # PCA: Reducing to 2 principal components for visualization
+    scaler = StandardScaler()
+    scaled_features = scaler.fit_transform(df[['Horizontal', 'Vertical', 'Communication']])  # Standardizing features
+    pca = PCA(n_components=2)
+    pca_components = pca.fit_transform(scaled_features)
+    pca_df = pd.DataFrame(data=pca_components, columns=['Principal Component 1', 'Principal Component 2'])
+    pca_df['AgentID'] = df['AgentID']
+
+    # Agent Behavior Modeling: Clustering based on action vectors
+    # Using KMeans as an example clustering algorithm
+    kmeans = KMeans(n_clusters=4, random_state=0)  # Assuming we want to cluster into the number of agents
+    cluster_labels = kmeans.fit_predict(scaled_features)
+    df['Cluster'] = cluster_labels
+
+    # Plotting the results
+    # Regression result
+    plt.figure(figsize=(10, 6))
+    plt.scatter(df['Communication'], df['Horizontal'], alpha=0.5)
+    plt.plot(df['Communication'], df['Predicted_Horizontal'], color='red', linewidth=2)
+    plt.title('Regression: Predicting Horizontal Movement from Communication Signal')
+    plt.xlabel('Communication Signal')
+    plt.ylabel('Horizontal Movement')
+    plot_name = f'regression_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.savefig(f'plots/analysis/{plot_name}')
+    plt.show()
+
+    # PCA result
+    plt.figure(figsize=(10, 6))
+    plt.scatter(pca_df['Principal Component 1'], pca_df['Principal Component 2'], c=pca_df['AgentID'], alpha=0.5)
+    plt.title('PCA: 2 Principal Components of Action Space')
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    plt.colorbar(label='Agent ID')
+    plot_name = f'pca_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.savefig(f'plots/analysis/{plot_name}')
+    plt.show()
+
+    # Clustering result
+    plt.figure(figsize=(10, 6))
+    plt.scatter(df['Horizontal'], df['Vertical'], c=df['Cluster'], alpha=0.5)
+    plt.title('Clustering: Agent Behavior Modeling')
+    plt.xlabel('Horizontal Movement')
+    plt.ylabel('Vertical Movement')
+    plt.colorbar(label='Cluster')
+    plot_name = f'clustering_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.savefig(f'plots/analysis/{plot_name}')
+    plt.show()
+    
+    # Conduct regression analysis for horizontal movements predicted by communication signals
+    # First, prepare the data for statsmodels
+    X = sm.add_constant(communication_signals)  # Adds a constant term to the predictor
+    y = horizontal_movements
+
+    # Fit the regression model
+    model = sm.OLS(y, X).fit()
+
+    # Residual Analysis
+    residuals = model.resid
+
+    # Entropy of Communication Signals
+    signal_entropy = entropy(df['Communication'])
+
+    # Print the results
+    print(f'Entropy of Communication Signals: {signal_entropy}')
+
+    
+    # Save prints in a text file
+    with open(f'plots/analysis/analysis_results_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.txt', 'w') as f:
+        # Print the summary of the regression model
+        f.write(str(model.summary()) + '\n')
+
+        # Test for normality of residuals
+        jb_test = sm.stats.stattools.jarque_bera(residuals)
+        f.write(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}\n")
+
+        # Test for homoscedasticity
+        bp_test = sm.stats.diagnostic.het_breuschpagan(residuals, model.model.exog)
+        f.write(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}\n")
+        
+        f.write(f'Entropy of Communication Signals: {signal_entropy}\n')
+    
+
+    # Plot for visual inspection of homoscedasticity
+    plt.scatter(model.predict(X), residuals)
+    plt.axhline(y=0, color='r', linestyle='--')
+    plt.xlabel('Predicted Values')
+    plt.ylabel('Residuals')
+    plt.title('Residuals vs Predicted Values')
+    plot_name = f'residuals_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.savefig(f'plots/analysis/{plot_name}')
+    plt.show()
+
+    # Histogram of residuals
+    plt.hist(residuals, bins=20)
+    plt.xlabel('Residuals')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of Residuals')
+    plot_name = f'residuals_histogram_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.savefig(f'plots/analysis/{plot_name}')
+    plt.show()
+
+    # Q-Q plot for normality of residuals
+    fig = sm.qqplot(residuals, line ='45')
+    plt.title('Q-Q Plot of Residuals')
+    plot_name = f'residuals_qq_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.savefig(f'plots/analysis/{plot_name}')
+    plt.show()
+    
+    # Time-Frequency Analysis using Welch's method
+    # frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hanning', nperseg=1024, scaling='spectrum')
+    frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hann', nperseg=1024, scaling='spectrum')
+
+    # Plot the Power Spectral Density
+    plt.figure(figsize=(10, 6))
+    plt.semilogy(frequencies, power_spectral_density)
+    plt.title('Power Spectral Density of Communication Signals')
+    plt.xlabel('Frequency [Hz]')
+    plt.ylabel('Power/Frequency [V^2/Hz]')
+    plot_name = f'psd_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.savefig(f'plots/analysis/{plot_name}')
+    plt.show()
+
+    # Cross-Correlation Analysis
+    # Assuming we have communication signals from two different agents
+    communication_agent_1 = df[df['AgentID'] == 0]['Communication']
+    communication_agent_2 = df[df['AgentID'] == 1]['Communication']
+    cross_correlation = np.correlate(communication_agent_1, communication_agent_2, mode='full')
+
+    # Plot Cross-Correlation
+    lags = np.arange(-len(communication_agent_1) + 1, len(communication_agent_2))
+    plt.figure(figsize=(10, 6))
+    plt.plot(lags, cross_correlation)
+    plt.title('Cross-Correlation of Communication Signals Between Two Agents')
+    plt.xlabel('Lag')
+    plt.ylabel('Cross-correlation')
+    plot_name = f'cross_correlation_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    plt.show()
+    
+    def calculate_mutual_information(signal1, signal2, n_bins=10):
+        """
+        Calculate the mutual information between two continuous signals by discretizing them.
+
+        Parameters:
+        - signal1: np.ndarray, the first signal.
+        - signal2: np.ndarray, the second signal.
+        - n_bins: int, the number of bins to use for discretizing the signals.
+
+        Returns:
+        - mi: float, the calculated mutual information.
+        """
+
+        # Ensure the signals are numpy arrays
+        signal1 = np.array(signal1)
+        signal2 = np.array(signal2)
+
+        # Discretize the signals
+        est = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='uniform')
+        signal1_discretized = est.fit_transform(signal1.reshape(-1, 1)).flatten()
+        signal2_discretized = est.fit_transform(signal2.reshape(-1, 1)).flatten()
+
+        # Calculate mutual information
+        mi = mutual_info_score(signal1_discretized, signal2_discretized)
+
+        return mi
+
+    
+    mutual_information = calculate_mutual_information(communication_agent_1, communication_agent_2)
+    print(f'Mutual Information between two communication signals: {mutual_information}')
+
+    # Mutual Information
+    # Here, a function to calculate mutual information is needed
+    # This is a placeholder for demonstration purposes
+    # def calculate_mutual_information(signal1, signal2):
+    #     # Mutual information calculation here
+    #     return mi
+
+    # mutual_information = calculate_mutual_information(communication_agent_1, communication_agent_2)
+    
+    # # Print the summary of the regression model
+    # print(model.summary())
+
+    # # Test for normality of residuals
+    # jb_test = sm.stats.stattools.jarque_bera(residuals)
+    # print(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}")
+
+    # # Test for homoscedasticity
+    # bp_test = sm.stats.diagnostic.het_breuschpagan(residuals, model.model.exog)
+    # print(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}")
+
+    
+    
 
     return overall_avg_reward
 
@@ -474,7 +690,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 10000, 1000
+    episodes, episode_lengths = 100000, 1000
     total_steps = episodes * episode_lengths
     
     
