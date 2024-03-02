@@ -35,10 +35,9 @@ MODEL_DIR = 'models'
 TRAIN_DIR = 'train'
 OPTIMIZE_DIR = 'optimize'
 architecture = 256
- 
 
 class CustomFeaturesExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: gym.spaces.Space, features_dim: int = 128, use_extra_layers: bool = False, activation_function: str = 'relu', use_normalization: bool = False):
+    def __init__(self, observation_space: gym.spaces.Space, features_dim: int = 64, use_extra_layers: bool = True, activation_function: str = 'relu', use_normalization: bool = True):
         super(CustomFeaturesExtractor, self).__init__(observation_space, features_dim)
         
         input_dim = np.prod(observation_space.shape)
@@ -46,69 +45,93 @@ class CustomFeaturesExtractor(BaseFeaturesExtractor):
         
         if use_normalization:
             layers.append(nn.BatchNorm1d(features_dim))
-        
-        if activation_function == 'relu':
-            layers.append(nn.ReLU())
-        elif activation_function == 'leaky_relu':
-            layers.append(nn.LeakyReLU())
+        layers.append(nn.ReLU() if activation_function == 'relu' else nn.LeakyReLU())
         
         if use_extra_layers:
-            if use_normalization:
-                layers.append(nn.BatchNorm1d(features_dim))
-            layers.append(nn.Dropout(p=0.5))
-            layers.append(nn.Linear(features_dim, features_dim))
-            if activation_function == 'relu':
-                layers.append(nn.ReLU())
-            elif activation_function == 'leaky_relu':
-                layers.append(nn.LeakyReLU())
+            layers.extend([
+                nn.Linear(features_dim, features_dim),
+                nn.ReLU() if activation_function == 'relu' else nn.LeakyReLU()
+            ])
         
         self._extractor = nn.Sequential(*layers)
 
     def forward(self, observations):
         return self._extractor(observations)
+
+ 
+
+# class CustomFeaturesExtractor(BaseFeaturesExtractor):
+#     def __init__(self, observation_space: gym.spaces.Space, features_dim: int = 128, use_extra_layers: bool = False, activation_function: str = 'relu', use_normalization: bool = False):
+#         super(CustomFeaturesExtractor, self).__init__(observation_space, features_dim)
+        
+#         input_dim = np.prod(observation_space.shape)
+#         layers = [nn.Linear(input_dim, features_dim)]
+        
+#         if use_normalization:
+#             layers.append(nn.BatchNorm1d(features_dim))
+        
+#         if activation_function == 'relu':
+#             layers.append(nn.ReLU())
+#         elif activation_function == 'leaky_relu':
+#             layers.append(nn.LeakyReLU())
+        
+#         if use_extra_layers:
+#             if use_normalization:
+#                 layers.append(nn.BatchNorm1d(features_dim))
+#             layers.append(nn.Dropout(p=0.5))
+#             layers.append(nn.Linear(features_dim, features_dim))
+#             if activation_function == 'relu':
+#                 layers.append(nn.ReLU())
+#             elif activation_function == 'leaky_relu':
+#                 layers.append(nn.LeakyReLU())
+        
+#         self._extractor = nn.Sequential(*layers)
+
+#     def forward(self, observations):
+#         return self._extractor(observations)
     
 
-class TensorboardCallback(BaseCallback):
-    """
-    Custom callback for logging to Tensorboard.
-    """
-    def __init__(self, verbose=0, log_dir="tensorboard_logs"):
-        super(TensorboardCallback, self).__init__(verbose)
-        self.log_dir = log_dir
+# class TensorboardCallback(BaseCallback):
+#     """
+#     Custom callback for logging to Tensorboard.
+#     """
+#     def __init__(self, verbose=0, log_dir="tensorboard_logs"):
+#         super(TensorboardCallback, self).__init__(verbose)
+#         self.log_dir = log_dir
 
-    def _on_training_start(self):
-        log_dir = os.path.join(self.log_dir, f"{self.model.env.unwrapped.metadata['name']}_{time.strftime('%Y%m%d-%H%M%S')}")
-        self.logger = Monitor(self.model.env, log_dir) 
+#     def _on_training_start(self):
+#         log_dir = os.path.join(self.log_dir, f"{self.model.env.unwrapped.metadata['name']}_{time.strftime('%Y%m%d-%H%M%S')}")
+#         self.logger = Monitor(self.model.env, log_dir) 
 
-    def _on_step(self) -> bool:
-        # Feature Evolution Tracking
-        feature_values = self.model.policy.extract_features(self.model.rollout_buffer.observations[-1])
-        self.logger.record('features/mean', feature_values.mean())
-        self.logger.record('features/std', feature_values.std())
-        self.logger.record('features/min', feature_values.min())  
-        self.logger.record('features/max', feature_values.max())
+#     def _on_step(self) -> bool:
+#         # Feature Evolution Tracking
+#         feature_values = self.model.policy.extract_features(self.model.rollout_buffer.observations[-1])
+#         self.logger.record('features/mean', feature_values.mean())
+#         self.logger.record('features/std', feature_values.std())
+#         self.logger.record('features/min', feature_values.min())  
+#         self.logger.record('features/max', feature_values.max())
 
-        # Gradient Analysis
-        for name, param in self.model.policy.named_parameters():
-            if 'features_extractor' in name:
-                self.logger.record(f'grads/{name}_norm', param.grad.norm().item())
-            if 'policy' in name:  # Log gradients of the policy network as well
-                self.logger.record(f'grads/{name}_norm', param.grad.norm().item())
+#         # Gradient Analysis
+#         for name, param in self.model.policy.named_parameters():
+#             if 'features_extractor' in name:
+#                 self.logger.record(f'grads/{name}_norm', param.grad.norm().item())
+#             if 'policy' in name:  # Log gradients of the policy network as well
+#                 self.logger.record(f'grads/{name}_norm', param.grad.norm().item())
 
-        # Optional: Distribution Visualization
-        plt.figure(figsize=(8, 4)) 
-        plt.hist(feature_values.flatten(), bins=20)  
-        plt.xlabel('Feature Values')
-        plt.ylabel('Frequency')
-        plt.title('Distribution of Feature Values')
-        self.logger.record('features/histogram', plt)
+#         # Optional: Distribution Visualization
+#         plt.figure(figsize=(8, 4)) 
+#         plt.hist(feature_values.flatten(), bins=20)  
+#         plt.xlabel('Feature Values')
+#         plt.ylabel('Frequency')
+#         plt.title('Distribution of Feature Values')
+#         self.logger.record('features/histogram', plt)
 
-        # Optional: Correlation Analysis (if you have multiple features)
-        if feature_values.shape[1] > 1:  # Check if you have multiple features
-            corr_matrix = feature_values.corr()
-            self.logger.record('features/corr_matrix', corr_matrix)
+#         # Optional: Correlation Analysis (if you have multiple features)
+#         if feature_values.shape[1] > 1:  # Check if you have multiple features
+#             corr_matrix = feature_values.corr()
+#             self.logger.record('features/corr_matrix', corr_matrix)
 
-        return True
+#         return True
 
 
 def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None, **hyperparam_kwargs):
@@ -125,7 +148,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     
     # Create the Tensorboard callback
     log_dir = os.path.join("tensorboard_logs", f"{env.unwrapped.metadata['name']}_{time.strftime('%Y%m%d-%H%M%S')}") 
-    tensorboard_callback = TensorboardCallback(log_dir=log_dir)
+    #tensorboard_callback = TensorboardCallback(log_dir=log_dir)
 
        
     print(f"Starting training on {str(env.metadata['name'])}.")
@@ -148,12 +171,9 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     }
     
     policy_kwargs_ppo = {
-        "net_arch": {
-            "pi": [architecture,],#  architecture,],# architecture],  # Actor network architecture
-            "qf": [architecture, architecture]# architecture]   # Critic network architecture
-        },
+        "net_arch": [128, 64], #dict(pi=[128, 128], vf=[128, 128]),
         "features_extractor_class": CustomFeaturesExtractor,
-        "features_extractor_kwargs": {"features_dim": 128},
+        "features_extractor_kwargs": {"features_dim": 64, "use_extra_layers": True, "activation_function": "relu", "use_normalization": True},
         "optimizer_class": th.optim.Adam,
         "optimizer_kwargs": {"weight_decay": 0.01},
         
@@ -164,7 +184,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     }
 
     if model_name == "PPO":
-        model = PPO(PPOMlpPolicy, env, verbose=3, **hyperparam_kwargs)#, policy_kwargs=policy_kwargs_ppo, **hyperparam_kwargs) 
+        model = PPO(PPOMlpPolicy, env, verbose=2,  policy_kwargs=policy_kwargs_ppo, **hyperparam_kwargs) 
     elif model_name == "SAC":
         
         
@@ -200,7 +220,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
 
     # Log env_kwargs, hyperparam_kwargs, and policy_kwargs
     with open(log_file_path, "a") as log_file:
-        log_file.write(f"Training on {str(env.unwrapped.metadata['name'])} with {model_choice}.\n")
+        log_file.write(f"Training on {str(env.unwrapped.metadata['name'])} with {model_choice} for {steps} steps in {steps/1000} episodes.\n")
         log_file.write("env_kwargs:\n")
         log_file.write(str(env_kwargs))
         log_file.write("\n\n")
@@ -208,14 +228,17 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
         log_file.write("hyperparam_kwargs:\n")
         log_file.write(str(hyperparam_kwargs))
         log_file.write("\n\n")
-
-        log_file.write("policy_kwargs_sac:\n")
-        log_file.write(str(policy_kwargs_sac))
-        log_file.write("\n\n")
-
-        log_file.write("policy_kwargs_ppo:\n")
-        log_file.write(str(policy_kwargs_ppo))
-        log_file.write("\n\n")
+        if model_name == "SAC":
+            log_file.write("policy_kwargs_sac:\n")
+            log_file.write(str(policy_kwargs_sac))
+            log_file.write("\n\n")
+        elif model_name == "PPO":
+            log_file.write("policy_kwargs_ppo:\n")
+            log_file.write(str(policy_kwargs_ppo))
+            log_file.write("\n\n")
+        else:
+            log_file.write("No policy_kwargs found.\n")
+            log_file.write("\n\n")
 
     with open(log_file_path, "a") as log_file:
         log_file.write(f"Model saved to {model_path}\n")
@@ -274,7 +297,7 @@ def fine_tune_model(env_fn, model_name, model_subdir, model_path, steps=100_000,
     env.close()
 
 
-def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_mode=None):
+def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_mode=None, analysis= False):
     actions=[]
     env = env_fn.env(render_mode=render_mode, **env_kwargs)
     print(f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})")
@@ -338,273 +361,276 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
     print(f"Total Avg reward: {total_avg_reward}")
     print(f"Overall Avg reward: {overall_avg_reward}")
 
-    # Plotting total rewards
-    os.makedirs('plots/eval', exist_ok=True)
-    plt.figure()
-    plt.bar(total_rewards.keys(), total_rewards.values())
-    plt.xlabel('Agents')
-    plt.ylabel('Total Rewards')
-    plt.title('Total Rewards per Agent in Waterworld Simulation')
-    plot_name = f'{model_name}_rewards_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/eval/{plot_name}')
+    # # Plotting total rewards
+    # os.makedirs('plots/eval', exist_ok=True)
+    # plt.figure()
+    # plt.bar(total_rewards.keys(), total_rewards.values())
+    # plt.xlabel('Agents')
+    # plt.ylabel('Total Rewards')
+    # plt.title('Total Rewards per Agent in Waterworld Simulation')
+    # plot_name = f'{model_name}_rewards_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/eval/{plot_name}')
     
-    # #print shape and type of actions
-    print("Shape of actions: ", np.shape(actions))
-    print("Type of actions: ", type(actions))
+    # # #print shape and type of actions
+    # print("Shape of actions: ", np.shape(actions))
+    # print("Type of actions: ", type(actions))
     
     
-    # Convert the list to a numpy array
-    actions_array = np.array(actions)
+    # # Convert the list to a numpy array
+    # actions_array = np.array(actions)
 
-    # Extract components
-    horizontal_movements = actions_array[:, 0]
-    vertical_movements = actions_array[:, 1]
-    communication_signals = actions_array[:, 2]
-    agent_ids = actions_array[:, 3]
+    # # Extract components
+    # horizontal_movements = actions_array[:, 0]
+    # vertical_movements = actions_array[:, 1]
+    # communication_signals = actions_array[:, 2]
+    # agent_ids = actions_array[:, 3]
 
-    # Color-coded Scatter Plot based on Agent ID
-    plt.figure(figsize=(8, 6))
-    scatter = plt.scatter(horizontal_movements, vertical_movements, c=agent_ids, cmap='viridis', alpha=0.5)
-    plt.colorbar(scatter, label='Agent ID')
-    plt.title('Movement Scatter Plot Color-coded by Agent ID')
-    plt.xlabel('Horizontal Movement')
-    plt.ylabel('Vertical Movement')
-    plt.grid(True)
-    plot_name = f'movement_scatter_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/hvi/{plot_name}')
-    plt.show()
+    # # Color-coded Scatter Plot based on Agent ID
+    # plt.figure(figsize=(8, 6))
+    # scatter = plt.scatter(horizontal_movements, vertical_movements, c=agent_ids, cmap='viridis', alpha=0.5)
+    # plt.colorbar(scatter, label='Agent ID')
+    # plt.title('Movement Scatter Plot Color-coded by Agent ID')
+    # plt.xlabel('Horizontal Movement')
+    # plt.ylabel('Vertical Movement')
+    # plt.grid(True)
+    # plot_name = f'movement_scatter_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/hvi/{plot_name}')
+    # plt.show()
 
-    # 3D Scatter Plot incorporating Communication Signal
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    scatter = ax.scatter(horizontal_movements, vertical_movements, communication_signals, c=agent_ids, cmap='viridis', alpha=0.5)
-    fig.colorbar(scatter, ax=ax, label='Agent ID')
-    ax.set_title('3D Scatter Plot of Movements and Communication Signal, Color-coded by Agent ID')
-    ax.set_xlabel('Horizontal Movement')
-    ax.set_ylabel('Vertical Movement')
-    ax.set_zlabel('Communication Signal')
-    plot_name = f'movement_communication_scatter_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/hvsi/{plot_name}')
-    plt.show()
+    # # 3D Scatter Plot incorporating Communication Signal
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = fig.add_subplot(111, projection='3d')
+    # scatter = ax.scatter(horizontal_movements, vertical_movements, communication_signals, c=agent_ids, cmap='viridis', alpha=0.5)
+    # fig.colorbar(scatter, ax=ax, label='Agent ID')
+    # ax.set_title('3D Scatter Plot of Movements and Communication Signal, Color-coded by Agent ID')
+    # ax.set_xlabel('Horizontal Movement')
+    # ax.set_ylabel('Vertical Movement')
+    # ax.set_zlabel('Communication Signal')
+    # plot_name = f'movement_communication_scatter_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/hvsi/{plot_name}')
+    # plt.show()
     
-    from sklearn.linear_model import LinearRegression
-    from sklearn.decomposition import PCA
-    from sklearn.cluster import KMeans
-    from sklearn.preprocessing import StandardScaler
-    import pandas as pd
-    import statsmodels.api as sm
-    from statsmodels.stats.outliers_influence import variance_inflation_factor
-    from scipy import stats
-    from scipy.signal import welch
-    from scipy.stats import entropy
-    from sklearn.metrics import mutual_info_score
-    from sklearn.preprocessing import KBinsDiscretizer
+    # from sklearn.linear_model import LinearRegression
+    # from sklearn.decomposition import PCA
+    # from sklearn.cluster import KMeans
+    # from sklearn.preprocessing import StandardScaler
+    # import pandas as pd
+    # import statsmodels.api as sm
+    # from statsmodels.stats.outliers_influence import variance_inflation_factor
+    # from scipy import stats
+    # from scipy.signal import welch
+    # from scipy.stats import entropy
+    # from sklearn.metrics import mutual_info_score
+    # from sklearn.preprocessing import KBinsDiscretizer
     
 
-    # Convert to DataFrame for easier manipulation
-    df = pd.DataFrame(actions_array, columns=['Horizontal', 'Vertical', 'Communication', 'AgentID'])
+    # # Convert to DataFrame for easier manipulation
+    # df = pd.DataFrame(actions_array, columns=['Horizontal', 'Vertical', 'Communication', 'AgentID'])
 
-    # Regression Analysis: Predicting Horizontal Movement based on Communication Signal
-    X = df[['Communication']]  # Predictor variable
-    y = df['Horizontal']       # Response variable
-    regression_model = LinearRegression()
-    regression_model.fit(X, y)
-    df['Predicted_Horizontal'] = regression_model.predict(X)
+    # # Regression Analysis: Predicting Horizontal Movement based on Communication Signal
+    # X = df[['Communication']]  # Predictor variable
+    # y = df['Horizontal']       # Response variable
+    # regression_model = LinearRegression()
+    # regression_model.fit(X, y)
+    # df['Predicted_Horizontal'] = regression_model.predict(X)
 
-    # PCA: Reducing to 2 principal components for visualization
-    scaler = StandardScaler()
-    scaled_features = scaler.fit_transform(df[['Horizontal', 'Vertical', 'Communication']])  # Standardizing features
-    pca = PCA(n_components=2)
-    pca_components = pca.fit_transform(scaled_features)
-    pca_df = pd.DataFrame(data=pca_components, columns=['Principal Component 1', 'Principal Component 2'])
-    pca_df['AgentID'] = df['AgentID']
+    # # PCA: Reducing to 2 principal components for visualization
+    # scaler = StandardScaler()
+    # scaled_features = scaler.fit_transform(df[['Horizontal', 'Vertical', 'Communication']])  # Standardizing features
+    # pca = PCA(n_components=2)
+    # pca_components = pca.fit_transform(scaled_features)
+    # pca_df = pd.DataFrame(data=pca_components, columns=['Principal Component 1', 'Principal Component 2'])
+    # pca_df['AgentID'] = df['AgentID']
 
-    # Agent Behavior Modeling: Clustering based on action vectors
-    # Using KMeans as an example clustering algorithm
-    kmeans = KMeans(n_clusters=4, random_state=0)  # Assuming we want to cluster into the number of agents
-    cluster_labels = kmeans.fit_predict(scaled_features)
-    df['Cluster'] = cluster_labels
+    # # Agent Behavior Modeling: Clustering based on action vectors
+    # # Using KMeans as an example clustering algorithm
+    # kmeans = KMeans(n_clusters=4, random_state=0)  # Assuming we want to cluster into the number of agents
+    # cluster_labels = kmeans.fit_predict(scaled_features)
+    # df['Cluster'] = cluster_labels
 
-    # Plotting the results
-    # Regression result
-    plt.figure(figsize=(10, 6))
-    plt.scatter(df['Communication'], df['Horizontal'], alpha=0.5)
-    plt.plot(df['Communication'], df['Predicted_Horizontal'], color='red', linewidth=2)
-    plt.title('Regression: Predicting Horizontal Movement from Communication Signal')
-    plt.xlabel('Communication Signal')
-    plt.ylabel('Horizontal Movement')
-    plot_name = f'regression_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/analysis/{plot_name}')
-    plt.show()
+    # # Plotting the results
+    # # Regression result
+    # plt.figure(figsize=(10, 6))
+    # plt.scatter(df['Communication'], df['Horizontal'], alpha=0.5)
+    # plt.plot(df['Communication'], df['Predicted_Horizontal'], color='red', linewidth=2)
+    # plt.title('Regression: Predicting Horizontal Movement from Communication Signal')
+    # plt.xlabel('Communication Signal')
+    # plt.ylabel('Horizontal Movement')
+    # plot_name = f'regression_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/analysis/{plot_name}')
+    # plt.show()
 
-    # PCA result
-    plt.figure(figsize=(10, 6))
-    plt.scatter(pca_df['Principal Component 1'], pca_df['Principal Component 2'], c=pca_df['AgentID'], alpha=0.5)
-    plt.title('PCA: 2 Principal Components of Action Space')
-    plt.xlabel('Principal Component 1')
-    plt.ylabel('Principal Component 2')
-    plt.colorbar(label='Agent ID')
-    plot_name = f'pca_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/analysis/{plot_name}')
-    plt.show()
+    # # PCA result
+    # plt.figure(figsize=(10, 6))
+    # plt.scatter(pca_df['Principal Component 1'], pca_df['Principal Component 2'], c=pca_df['AgentID'], alpha=0.5)
+    # plt.title('PCA: 2 Principal Components of Action Space')
+    # plt.xlabel('Principal Component 1')
+    # plt.ylabel('Principal Component 2')
+    # plt.colorbar(label='Agent ID')
+    # plot_name = f'pca_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/analysis/{plot_name}')
+    # plt.show()
 
-    # Clustering result
-    plt.figure(figsize=(10, 6))
-    plt.scatter(df['Horizontal'], df['Vertical'], c=df['Cluster'], alpha=0.5)
-    plt.title('Clustering: Agent Behavior Modeling')
-    plt.xlabel('Horizontal Movement')
-    plt.ylabel('Vertical Movement')
-    plt.colorbar(label='Cluster')
-    plot_name = f'clustering_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/analysis/{plot_name}')
-    plt.show()
+    # # Clustering result
+    # plt.figure(figsize=(10, 6))
+    # plt.scatter(df['Horizontal'], df['Vertical'], c=df['Cluster'], alpha=0.5)
+    # plt.title('Clustering: Agent Behavior Modeling')
+    # plt.xlabel('Horizontal Movement')
+    # plt.ylabel('Vertical Movement')
+    # plt.colorbar(label='Cluster')
+    # plot_name = f'clustering_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/analysis/{plot_name}')
+    # plt.show()
     
-    # Conduct regression analysis for horizontal movements predicted by communication signals
-    # First, prepare the data for statsmodels
-    X = sm.add_constant(communication_signals)  # Adds a constant term to the predictor
-    y = horizontal_movements
+    # # Conduct regression analysis for horizontal movements predicted by communication signals
+    # # First, prepare the data for statsmodels
+    # X = sm.add_constant(communication_signals)  # Adds a constant term to the predictor
+    # y = horizontal_movements
 
-    # Fit the regression model
-    model = sm.OLS(y, X).fit()
+    # # Fit the regression model
+    # model = sm.OLS(y, X).fit()
 
-    # Residual Analysis
-    residuals = model.resid
+    # # Residual Analysis
+    # residuals = model.resid
 
-    # Entropy of Communication Signals
-    signal_entropy = entropy(df['Communication'])
+    # # Entropy of Communication Signals
+    # signal_entropy = entropy(df['Communication'])
 
-    # Print the results
-    print(f'Entropy of Communication Signals: {signal_entropy}')
+    # # Print the results
+    # print(f'Entropy of Communication Signals: {signal_entropy}')
 
     
-    # Save prints in a text file
-    with open(f'plots/analysis/analysis_results_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.txt', 'w') as f:
-        # Print the summary of the regression model
-        f.write(str(model.summary()) + '\n')
+    # # Save prints in a text file
+    # with open(f'plots/analysis/analysis_results_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.txt', 'w') as f:
+    #     # Print the summary of the regression model
+    #     f.write(str(model.summary()) + '\n')
 
-        # Test for normality of residuals
-        jb_test = sm.stats.stattools.jarque_bera(residuals)
-        f.write(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}\n")
+    #     # Test for normality of residuals
+    #     jb_test = sm.stats.stattools.jarque_bera(residuals)
+    #     f.write(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}\n")
 
-        # Test for homoscedasticity
-        bp_test = sm.stats.diagnostic.het_breuschpagan(residuals, model.model.exog)
-        f.write(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}\n")
+    #     # Test for homoscedasticity
+    #     bp_test = sm.stats.diagnostic.het_breuschpagan(residuals, model.model.exog)
+    #     f.write(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}\n")
         
-        f.write(f'Entropy of Communication Signals: {signal_entropy}\n')
+    #     f.write(f'Entropy of Communication Signals: {signal_entropy}\n')
     
 
-    # Plot for visual inspection of homoscedasticity
-    plt.scatter(model.predict(X), residuals)
-    plt.axhline(y=0, color='r', linestyle='--')
-    plt.xlabel('Predicted Values')
-    plt.ylabel('Residuals')
-    plt.title('Residuals vs Predicted Values')
-    plot_name = f'residuals_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/analysis/{plot_name}')
-    plt.show()
+    # # Plot for visual inspection of homoscedasticity
+    # plt.scatter(model.predict(X), residuals)
+    # plt.axhline(y=0, color='r', linestyle='--')
+    # plt.xlabel('Predicted Values')
+    # plt.ylabel('Residuals')
+    # plt.title('Residuals vs Predicted Values')
+    # plot_name = f'residuals_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/analysis/{plot_name}')
+    # plt.show()
 
-    # Histogram of residuals
-    plt.hist(residuals, bins=20)
-    plt.xlabel('Residuals')
-    plt.ylabel('Frequency')
-    plt.title('Histogram of Residuals')
-    plot_name = f'residuals_histogram_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/analysis/{plot_name}')
-    plt.show()
+    # # Histogram of residuals
+    # plt.hist(residuals, bins=20)
+    # plt.xlabel('Residuals')
+    # plt.ylabel('Frequency')
+    # plt.title('Histogram of Residuals')
+    # plot_name = f'residuals_histogram_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/analysis/{plot_name}')
+    # plt.show()
 
-    # Q-Q plot for normality of residuals
-    fig = sm.qqplot(residuals, line ='45')
-    plt.title('Q-Q Plot of Residuals')
-    plot_name = f'residuals_qq_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/analysis/{plot_name}')
-    plt.show()
+    # # Q-Q plot for normality of residuals
+    # fig = sm.qqplot(residuals, line ='45')
+    # plt.title('Q-Q Plot of Residuals')
+    # plot_name = f'residuals_qq_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/analysis/{plot_name}')
+    # plt.show()
     
-    # Time-Frequency Analysis using Welch's method
-    # frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hanning', nperseg=1024, scaling='spectrum')
-    frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hann', nperseg=1024, scaling='spectrum')
+    # # Time-Frequency Analysis using Welch's method
+    # # frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hanning', nperseg=1024, scaling='spectrum')
+    # frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hann', nperseg=1024, scaling='spectrum')
 
-    # Plot the Power Spectral Density
-    plt.figure(figsize=(10, 6))
-    plt.semilogy(frequencies, power_spectral_density)
-    plt.title('Power Spectral Density of Communication Signals')
-    plt.xlabel('Frequency [Hz]')
-    plt.ylabel('Power/Frequency [V^2/Hz]')
-    plot_name = f'psd_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.savefig(f'plots/analysis/{plot_name}')
-    plt.show()
+    # # Plot the Power Spectral Density
+    # plt.figure(figsize=(10, 6))
+    # plt.semilogy(frequencies, power_spectral_density)
+    # plt.title('Power Spectral Density of Communication Signals')
+    # plt.xlabel('Frequency [Hz]')
+    # plt.ylabel('Power/Frequency [V^2/Hz]')
+    # plot_name = f'psd_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.savefig(f'plots/analysis/{plot_name}')
+    # plt.show()
 
-    # Cross-Correlation Analysis
-    # Assuming we have communication signals from two different agents
-    communication_agent_1 = df[df['AgentID'] == 0]['Communication']
-    communication_agent_2 = df[df['AgentID'] == 1]['Communication']
-    cross_correlation = np.correlate(communication_agent_1, communication_agent_2, mode='full')
+    # # Cross-Correlation Analysis
+    # # Assuming we have communication signals from two different agents
+    # communication_agent_1 = df[df['AgentID'] == 0]['Communication']
+    # communication_agent_2 = df[df['AgentID'] == 1]['Communication']
+    # cross_correlation = np.correlate(communication_agent_1, communication_agent_2, mode='full')
 
-    # Plot Cross-Correlation
-    lags = np.arange(-len(communication_agent_1) + 1, len(communication_agent_2))
-    plt.figure(figsize=(10, 6))
-    plt.plot(lags, cross_correlation)
-    plt.title('Cross-Correlation of Communication Signals Between Two Agents')
-    plt.xlabel('Lag')
-    plt.ylabel('Cross-correlation')
-    plot_name = f'cross_correlation_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    plt.show()
+    # # Plot Cross-Correlation
+    # lags = np.arange(-len(communication_agent_1) + 1, len(communication_agent_2))
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(lags, cross_correlation)
+    # plt.title('Cross-Correlation of Communication Signals Between Two Agents')
+    # plt.xlabel('Lag')
+    # plt.ylabel('Cross-correlation')
+    # plot_name = f'cross_correlation_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
+    # plt.show()
     
-    def calculate_mutual_information(signal1, signal2, n_bins=10):
-        """
-        Calculate the mutual information between two continuous signals by discretizing them.
+    # def calculate_mutual_information(signal1, signal2, n_bins=10):
+    #     """
+    #     Calculate the mutual information between two continuous signals by discretizing them.
 
-        Parameters:
-        - signal1: np.ndarray, the first signal.
-        - signal2: np.ndarray, the second signal.
-        - n_bins: int, the number of bins to use for discretizing the signals.
+    #     Parameters:
+    #     - signal1: np.ndarray, the first signal.
+    #     - signal2: np.ndarray, the second signal.
+    #     - n_bins: int, the number of bins to use for discretizing the signals.
 
-        Returns:
-        - mi: float, the calculated mutual information.
-        """
+    #     Returns:
+    #     - mi: float, the calculated mutual information.
+    #     """
 
-        # Ensure the signals are numpy arrays
-        signal1 = np.array(signal1)
-        signal2 = np.array(signal2)
+    #     # Ensure the signals are numpy arrays
+    #     signal1 = np.array(signal1)
+    #     signal2 = np.array(signal2)
 
-        # Discretize the signals
-        est = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='uniform')
-        signal1_discretized = est.fit_transform(signal1.reshape(-1, 1)).flatten()
-        signal2_discretized = est.fit_transform(signal2.reshape(-1, 1)).flatten()
+    #     # Discretize the signals
+    #     est = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='uniform')
+    #     signal1_discretized = est.fit_transform(signal1.reshape(-1, 1)).flatten()
+    #     signal2_discretized = est.fit_transform(signal2.reshape(-1, 1)).flatten()
 
-        # Calculate mutual information
-        mi = mutual_info_score(signal1_discretized, signal2_discretized)
+    #     # Calculate mutual information
+    #     mi = mutual_info_score(signal1_discretized, signal2_discretized)
 
-        return mi
-
-    
-    mutual_information = calculate_mutual_information(communication_agent_1, communication_agent_2)
-    print(f'Mutual Information between two communication signals: {mutual_information}')
-    
-    
+    #     return mi
 
     
-    # actions_array = np.array(actions)  # Convert your dataset to a numpy array
+    # mutual_information = calculate_mutual_information(communication_agent_1, communication_agent_2)
+    # print(f'Mutual Information between two communication signals: {mutual_information}')
+    
+    if analysis == True:
 
-    # # Instantiate the Analysis class with your actions array
-    # analysis = Analysis(actions_array)
+    
+        actions_array = np.array(actions)  # Convert your dataset to a numpy array
 
-    # # Perform mutual information calculation between all pairs of agents
-    # analysis.calculate_mutual_info_results()
+        # Instantiate the Analysis class with your actions array
+        analysis = Analysis(actions_array)
 
-    # # Print mutual information results to console
-    # analysis.print_mutual_info_results()
+        # Perform mutual information calculation between all pairs of agents
+        analysis.calculate_mutual_info_results()
 
-    # # Optionally, save mutual information results to a file
-    # analysis.save_mutual_info_results(filepath='mutual_information_results.txt')
+        # Print mutual information results to console
+        analysis.print_mutual_info_results()
+        
+        current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    # # Plot various analyses and visualizations
-    # analysis.plot_movement_scatter(plot_name='movement_scatter_plot.png')
-    # analysis.plot_movement_communication_scatter(plot_name='movement_communication_scatter_plot.png')
-    # analysis.plot_pca_results(plot_name='pca_plot.png')
-    # analysis.plot_clustering_results(plot_name='clustering_plot.png')
-    # analysis.plot_residuals_vs_predicted(plot_name='residuals_vs_predicted_plot.png')
-    # analysis.plot_residuals_histogram(plot_name='residuals_histogram.png')
-    # analysis.plot_residuals_qq_plot(plot_name='residuals_qq_plot.png')
+        # Optionally, save mutual information results to a file
+        analysis.save_mutual_info_results(filepath=f'mutual_information_results{current_datetime}.txt')
+
+        # Plot various analyses and visualizations
+        
+        analysis.plot_movement_scatter(plot_name=f'movement_scatter_plot_{current_datetime}.png')
+        analysis.plot_movement_communication_scatter(plot_name=f'movement_communication_scatter_plot_{current_datetime}.png')
+        analysis.plot_pca_results(plot_name=f'pca_plot_{current_datetime}.png')
+        analysis.plot_clustering_results(plot_name=f'clustering_plot_{current_datetime}.png')
+        analysis.plot_residuals_vs_predicted(plot_name=f'residuals_vs_predicted_plot_{current_datetime}.png')
+        analysis.plot_residuals_histogram(plot_name=f'residuals_histogram_{current_datetime}.png')
+        analysis.plot_residuals_qq_plot(plot_name=f'residuals_qq_plot_{current_datetime}.png')
 
     
 
@@ -721,7 +747,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 200000, 1000
+    episodes, episode_lengths = 20000, 1500
     total_steps = episodes * episode_lengths
     
     
@@ -730,9 +756,9 @@ def run_train(model='PPO'):
         'n_steps': 500,  # Ca n be increased to gather more experiences before each update, beneficial for complex environments with many agents and interactions. #org: 4096
         'batch_size': 128,  # Increased size to handle the complexity and data volume from multiple agents. Adjust based on computational resources.
         'n_epochs': 10,  # The number of epochs to run the optimization over the data. This remains standard but could be adjusted for finer tuning.
-        'gamma': 0.995,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
+        'gamma': 0.9975,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
         'gae_lambda': 0.92,  # Slightly lower to increase bias for more stable but potentially less accurate advantage estimates. Adjust based on variance in reward signals.
-        'clip_range': lambda epoch: 0.1 + 0.15 * (0.98 ** epoch),  # Dynamic clipping range to gradually focus more on exploitation over exploration.
+        'clip_range': lambda epoch: 0.1 + 0.15 / (1.0 + 0.1 * epoch), #lambda epoch: 0.1 + 0.15 * (0.98 ** epoch),  # Dynamic clipping range to gradually focus more on exploitation over exploration.
         'clip_range_vf': None,  # If None, clip_range_vf is set to clip_range. This could be set to a fixed value or a schedule similar to clip_range for value function clipping.
         'ent_coef': 0.005,  # Reduced to slightly decrease the emphasis on exploration as the agents' policies mature, considering the communication aspect.
         'vf_coef': 0.5,  # Remains unchanged; a balanced emphasis on the value function's importance is crucial for stable learning.
@@ -775,9 +801,11 @@ def run_train(model='PPO'):
 def run_eval(model='PPO'):
     eval(env_fn, model, num_games=1, render_mode="human")
 
-def run_eval_path(model='PPO', path=r"models\train\waterworld_v4_20240228-144420.zip"):
-    eval_with_model_path(env_fn, path, model, num_games=1, render_mode=None)
-    #eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human")
+def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240301-164023.zip"): # models\train\waterworld_v4_20240301-081206.zip
+    # eval_with_model_path(env_fn, path, model, num_games=1, render_mode=None, analysis= False)
+    eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= False)
+    
+
 
 # Add a function to execute fine-tuning
 def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\fine_tuned_20240228-100118.zip"):
