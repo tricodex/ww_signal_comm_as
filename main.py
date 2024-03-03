@@ -147,7 +147,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     env.reset(seed=seed)
     
     # Create the Tensorboard callback
-    log_dir = os.path.join("tensorboard_logs", f"{env.unwrapped.metadata['name']}_{time.strftime('%Y%m%d-%H%M%S')}") 
+    # log_dir = os.path.join("tensorboard_logs", f"{env.unwrapped.metadata['name']}_{time.strftime('%Y%m%d-%H%M%S')}") 
     #tensorboard_callback = TensorboardCallback(log_dir=log_dir)
 
        
@@ -184,7 +184,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     }
 
     if model_name == "PPO":
-        model = PPO(PPOMlpPolicy, env, verbose=2,  policy_kwargs=policy_kwargs_ppo, **hyperparam_kwargs) 
+        model = PPO(PPOMlpPolicy, env, verbose=2, **hyperparam_kwargs) #policy_kwargs=policy_kwargs_ppo, **hyperparam_kwargs) 
     elif model_name == "SAC":
         
         
@@ -265,13 +265,13 @@ def fine_tune_model(env_fn, model_name, model_subdir, model_path, steps=100_000,
     env = env_fn.parallel_env(**env_kwargs)
     env.reset(seed=seed)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 8, num_cpus=2, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 32, num_cpus=6, base_class="stable_baselines3")
 
     if not os.path.exists(model_path):
         raise ValueError(f"Model file not found at {model_path}")
 
     if model_name == "PPO":
-        model = PPO.load(model_path, env=env)
+        model = PPO.load(model_path, env=env, **hyperparam_kwargs)
     elif model_name == "SAC":
         model = SAC.load(model_path, env=env)
     else:
@@ -289,7 +289,7 @@ def fine_tune_model(env_fn, model_name, model_subdir, model_path, steps=100_000,
     # Saving the fine-tuned model
     fine_tuned_model_dir = os.path.join(MODEL_DIR, "fine_tuned", model_subdir)
     os.makedirs(fine_tuned_model_dir, exist_ok=True)
-    fine_tuned_model_path = os.path.join(fine_tuned_model_dir, f"fine_tuned_{time.strftime('%Y%m%d-%H%M%S')}.zip")
+    fine_tuned_model_path = os.path.join(fine_tuned_model_dir, f"{model_name}_fine_tuned_{time.strftime('%Y%m%d-%H%M%S')}.zip")
     model.save(fine_tuned_model_path)
     print(f"Fine-tuned model saved to {fine_tuned_model_path}")
 
@@ -747,7 +747,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 20000, 1500
+    episodes, episode_lengths = 100000, 1000
     total_steps = episodes * episode_lengths
     
     
@@ -801,15 +801,74 @@ def run_train(model='PPO'):
 def run_eval(model='PPO'):
     eval(env_fn, model, num_games=1, render_mode="human")
 
-def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240301-164023.zip"): # models\train\waterworld_v4_20240301-081206.zip
-    # eval_with_model_path(env_fn, path, model, num_games=1, render_mode=None, analysis= False)
+def run_eval_path(model='PPO',  path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-162420.zip"): # models\train\waterworld_v4_20240301-081206.zip
+    eval_with_model_path(env_fn, path, model, num_games=8, render_mode=None, analysis= False)
     eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= False)
     
 
 
 # Add a function to execute fine-tuning
-def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\fine_tuned_20240228-100118.zip"):
-    fine_tune_model(env_fn, model, "fine_tuned", model_path, steps=(98304*5), seed=0)
+def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-162420.zip"):
+    episodes, episode_lengths = 5000, 1500
+    total_steps = episodes * episode_lengths
+    
+    ppo_hyperparams = {
+        'learning_rate': lambda epoch: max(2.5e-4 * (0.85 ** epoch), 1e-5),  # Adaptive learning rate decreasing over epochs to fine-tune learning as it progresses. The lower bound ensures learning doesn't halt.
+        'n_steps': 1000,  # Ca n be increased to gather more experiences before each update, beneficial for complex environments with many agents and interactions. #org: 4096
+        'batch_size': 128,  # Increased size to handle the complexity and data volume from multiple agents. Adjust based on computational resources.
+        'n_epochs': 10,  # The number of epochs to run the optimization over the data. This remains standard but could be adjusted for finer tuning.
+        'gamma': 0.9975,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
+        'gae_lambda': 0.92,  # Slightly lower to increase bias for more stable but potentially less accurate advantage estimates. Adjust based on variance in reward signals.
+        'clip_range': lambda epoch: 0.1 + 0.15 / (1.0 + 0.1 * epoch), #lambda epoch: 0.1 + 0.15 * (0.98 ** epoch),  # Dynamic clipping range to gradually focus more on exploitation over exploration.
+        'clip_range_vf': None,  # If None, clip_range_vf is set to clip_range. This could be set to a fixed value or a schedule similar to clip_range for value function clipping.
+        'ent_coef': 0.005,  # Reduced to slightly decrease the emphasis on exploration as the agents' policies mature, considering the communication aspect.
+        'vf_coef': 0.5,  # Remains unchanged; a balanced emphasis on the value function's importance is crucial for stable learning.
+        'max_grad_norm': 0.5,  # Unchanged, as this generally provides good stability across a range of environments.
+        'use_sde': True,  # Enables Stochastic Differential Equations for continuous action spaces, offering potentially smoother policy updates.
+        'sde_sample_freq': 64,  # Determines how often to sample the noise for SDE, balancing exploration and computational efficiency.
+        'normalize_advantage': True,  # Ensuring the advantages are normalized can improve learning stability and efficiency.
+        
+    }
+    
+    # ppo_hyperparams = {
+    #     'learning_rate': lambda epoch: max(2.5e-4 * (0.85 ** epoch), 1e-5),
+    #     'n_steps': 800,
+    #     'batch_size': 128,
+    #     'n_epochs': 10,
+    #     'gamma': 0.998,
+    #     'gae_lambda': 0.92,
+    #     'clip_range': lambda epoch: 0.1 + 0.15 / (1.0 + 0.1 * epoch),
+    #     'clip_range_vf': None,
+    #     'ent_coef': 0.005,
+    #     'vf_coef': 0.5,
+    #     'max_grad_norm': 0.5,
+    #     'use_sde': True,
+    #     'sde_sample_freq': 64,
+    #     'normalize_advantage': True,
+    # }
+
+    sac_hyperparams = {
+        'learning_rate': lambda epoch: max(2.5e-4 * (0.85 ** epoch), 1e-5),
+        'batch_size': 256,
+        'gamma': 0.999,
+        'tau': 0.005,
+        'ent_coef': 'auto',
+        'target_entropy': 'auto',
+        'use_sde': True,
+        'sde_sample_freq': -1,
+        'learning_starts': 500,
+        'buffer_size': 500,
+        'gradient_steps': -1,
+        'optimize_memory_usage': False,
+        'replay_buffer_class': None,
+        'replay_buffer_kwargs': None,
+        'device': 'auto',
+    }
+
+    
+    hyperparam_kwargs = ppo_hyperparams if model == 'PPO' else sac_hyperparams
+    
+    fine_tune_model(env_fn, model, "fine_tuned", model_path, steps=total_steps, seed=0, **hyperparam_kwargs)
 
 
 
@@ -832,5 +891,5 @@ if __name__ == "__main__":
     elif process_to_run == 'eval_path':
         run_eval_path(model=model_choice)
     elif process_to_run == 'fine_tune':
-        run_fine_tune(model=model_choice, model_path=r"models\train\waterworld_v4_20240228-084753.zip")
+        run_fine_tune(model=model_choice, model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-162420.zip")
         
