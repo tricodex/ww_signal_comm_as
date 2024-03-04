@@ -12,8 +12,8 @@ from gymnasium.utils import seeding
 from scipy.spatial import distance as ssd
 from datetime import datetime
 
-import pyautogui
-import cv2
+# import pyautogui
+# import cv2
 
 from waterworld_models import (
     Evaders,
