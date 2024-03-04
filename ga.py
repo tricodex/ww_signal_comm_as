@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from settings import hyperparam_space_ppo, hyperparam_space_sac, env_kwargs
 import datetime
 import os
-import concurrent.futures
 
 
 OPTIMIZE_DIR = 'optimize'
