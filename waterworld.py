@@ -128,20 +128,6 @@ class raw_env(AECEnv, EzPickle):
 """
 # Waterworld
 
-```{figure} sisl_waterworld.gif
-:width: 140px
-:name: waterworld
-```
-
-This environment is part of the <a href='..'>SISL environments</a>. Please read that page first for general information.
-
-| Import               | `from pettingzoo.sisl import waterworld_v4`            |
-|----------------------|--------------------------------------------------------|
-| Actions              | Continuous                                             |
-| Parallel API         | Yes                                                    |
-| Manual Control       | No                                                     |
-| Agents               | `agents= ['pursuer_0', 'pursuer_1', ..., 'pursuer_4']` |
-| Agents               | 5                                                      |
 | Action Shape         | (2,)                                                   |
 | Action Values        | [-0.01, 0.01]                                          |
 | Observation Shape    | (242,)                                                 |
@@ -154,14 +140,18 @@ globally to all pursuers, or applied locally to specific pursuers. The environme
 vector to add to their current velocity. Each pursuer has a number of evenly spaced sensors which can read the speed and direction of objects near the pursuer. This information is reported in the observation space, and can be used to navigate the environment.
 
 
-
 Key Features
 
-	Actions: Continuous, with each agent selecting a thrust vector for movement and continuous a signal value
+	This version of Waterworld is a multi-agent reinforcement learning environment where agents, termed 'pursuers,' navigate and signal in a 2D space to cooperatively consume food and avoid poison.
+
+
+	Actions: Continuous, with each agent selecting a thrust vector for movement and continuous a signal value, which hopefully will be utilized after training, values in the range [-1, 1].
 	Agents: 6 'pursuers' interact with food and poison entities.
 	API: Supports Parallel API for simultaneous agent actions.
-	Observation Space: Each agent has an extended observation vector that includes sensory data and communication signals from other agents.
-	Communication: Agents can emit and receive signals, adding a layer of strategy.
+	Observation Space: Each agent has an extended observation vector that includes sensory data and signals from other agents, values in the range [-1, 1].
+	Communication: Agents can emit and receive signals, adding a layer of strategy, but not sure if it is utilized properly.
+	Rewards: Incorporate shared outcomes, with parameters for food consumption, poison avoidance, and movement/thrust efficiency.
+
 
 
 ### Observation Space
@@ -253,6 +243,8 @@ thrust_penalty=-0.5, local_ratio=1.0, speed_features=True, max_cycles=500)
 `speed_features`: toggles whether pursuing archea (agent) sensors detect speed of other objects and archea
 
 `max_cycles`: After max_cycles steps all agents will return done
+
+
 
 
 """
