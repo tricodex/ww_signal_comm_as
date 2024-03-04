@@ -605,7 +605,7 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
     
     if analysis == True:
 
-    
+        # Assuming 'actions' is your dataset
         actions_array = np.array(actions)  # Convert your dataset to a numpy array
 
         # Instantiate the Analysis class with your actions array
@@ -616,14 +616,17 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
 
         # Print mutual information results to console
         analysis.print_mutual_info_results()
-        
+
         current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # Optionally, save mutual information results to a file
-        analysis.save_mutual_info_results(filepath=f'mutual_information_results{current_datetime}.txt')
+        analysis.save_mutual_info_results(filepath=f'mutual_information_results_{current_datetime}.txt')
+
+        # Apply DBSCAN and Hierarchical clustering
+        analysis.apply_dbscan(eps=0.5, min_samples=5)
+        analysis.apply_hierarchical_clustering(method='ward')
 
         # Plot various analyses and visualizations
-        
         analysis.plot_movement_scatter(plot_name=f'movement_scatter_plot_{current_datetime}.png')
         analysis.plot_movement_communication_scatter(plot_name=f'movement_communication_scatter_plot_{current_datetime}.png')
         analysis.plot_pca_results(plot_name=f'pca_plot_{current_datetime}.png')
@@ -631,6 +634,36 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         analysis.plot_residuals_vs_predicted(plot_name=f'residuals_vs_predicted_plot_{current_datetime}.png')
         analysis.plot_residuals_histogram(plot_name=f'residuals_histogram_{current_datetime}.png')
         analysis.plot_residuals_qq_plot(plot_name=f'residuals_qq_plot_{current_datetime}.png')
+        analysis.plot_dbscan_results(plot_name=f'dbscan_clustering_plot_{current_datetime}.png')
+        analysis.plot_dendrogram(plot_name=f'dendrogram_plot_{current_datetime}.png')
+
+
+    
+        # actions_array = np.array(actions)  # Convert your dataset to a numpy array
+
+        # # Instantiate the Analysis class with your actions array
+        # analysis = Analysis(actions_array)
+
+        # # Perform mutual information calculation between all pairs of agents
+        # analysis.calculate_mutual_info_results()
+
+        # # Print mutual information results to console
+        # analysis.print_mutual_info_results()
+        
+        # current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        # # Optionally, save mutual information results to a file
+        # analysis.save_mutual_info_results(filepath=f'mutual_information_results{current_datetime}.txt')
+
+        # # Plot various analyses and visualizations
+        
+        # analysis.plot_movement_scatter(plot_name=f'movement_scatter_plot_{current_datetime}.png')
+        # analysis.plot_movement_communication_scatter(plot_name=f'movement_communication_scatter_plot_{current_datetime}.png')
+        # analysis.plot_pca_results(plot_name=f'pca_plot_{current_datetime}.png')
+        # analysis.plot_clustering_results(plot_name=f'clustering_plot_{current_datetime}.png')
+        # analysis.plot_residuals_vs_predicted(plot_name=f'residuals_vs_predicted_plot_{current_datetime}.png')
+        # analysis.plot_residuals_histogram(plot_name=f'residuals_histogram_{current_datetime}.png')
+        # analysis.plot_residuals_qq_plot(plot_name=f'residuals_qq_plot_{current_datetime}.png')
 
     
 
