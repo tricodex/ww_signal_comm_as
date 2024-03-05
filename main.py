@@ -500,21 +500,7 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
     # print(f'Entropy of Communication Signals: {signal_entropy}')
 
     
-    # # Save prints in a text file
-    # with open(f'plots/analysis/analysis_results_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.txt', 'w') as f:
-    #     # Print the summary of the regression model
-    #     f.write(str(model.summary()) + '\n')
-
-    #     # Test for normality of residuals
-    #     jb_test = sm.stats.stattools.jarque_bera(residuals)
-    #     f.write(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}\n")
-
-    #     # Test for homoscedasticity
-    #     bp_test = sm.stats.diagnostic.het_breuschpagan(residuals, model.model.exog)
-    #     f.write(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}\n")
-        
-    #     f.write(f'Entropy of Communication Signals: {signal_entropy}\n')
-    
+  
 
     # # Plot for visual inspection of homoscedasticity
     # plt.scatter(model.predict(X), residuals)
@@ -542,19 +528,8 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
     # plt.savefig(f'plots/analysis/{plot_name}')
     # plt.show()
     
-    # # Time-Frequency Analysis using Welch's method
-    # # frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hanning', nperseg=1024, scaling='spectrum')
-    # frequencies, power_spectral_density = welch(df['Communication'], fs=1.0, window='hann', nperseg=1024, scaling='spectrum')
-
-    # # Plot the Power Spectral Density
-    # plt.figure(figsize=(10, 6))
-    # plt.semilogy(frequencies, power_spectral_density)
-    # plt.title('Power Spectral Density of Communication Signals')
-    # plt.xlabel('Frequency [Hz]')
-    # plt.ylabel('Power/Frequency [V^2/Hz]')
-    # plot_name = f'psd_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/analysis/{plot_name}')
-    # plt.show()
+    
+    
 
     # # Cross-Correlation Analysis
     # # Assuming we have communication signals from two different agents
@@ -636,7 +611,9 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         analysis.plot_residuals_qq_plot(plot_name=f'residuals_qq_plot_{current_datetime}.png')
         analysis.plot_dbscan_results(plot_name=f'dbscan_clustering_plot_{current_datetime}.png')
         analysis.plot_dendrogram(plot_name=f'dendrogram_plot_{current_datetime}.png')
-
+        analysis.plot_mutual_info_heatmap(plot_name=f'mutual_info_heatmap_{current_datetime}.png')
+        analysis.save_analysis_results(file_name=f'plots/analysis/analysis_results_{current_datetime}.txt')
+        analysis.perform_time_frequency_analysis(plot_name = f'psd_plot_{current_datetime}.png')
 
     
         # actions_array = np.array(actions)  # Convert your dataset to a numpy array
@@ -834,15 +811,15 @@ def run_train(model='PPO'):
 def run_eval(model='PPO'):
     eval(env_fn, model, num_games=1, render_mode="human")
 
-def run_eval_path(model='PPO',  path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-162420.zip"): # models\train\waterworld_v4_20240301-081206.zip
-    eval_with_model_path(env_fn, path, model, num_games=8, render_mode=None, analysis= False)
-    eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= False)
+def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240304-133924.zip"): # models\train\waterworld_v4_20240301-081206.zip
+    #eval_with_model_path(env_fn, path, model, num_games=8, render_mode=None, analysis= False)
+    eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= True)
     
 
 
 # Add a function to execute fine-tuning
-def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-162420.zip"):
-    episodes, episode_lengths = 5000, 1500
+def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240304-133924.zip"):
+    episodes, episode_lengths = 25000, 2000
     total_steps = episodes * episode_lengths
     
     ppo_hyperparams = {
@@ -850,7 +827,7 @@ def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fin
         'n_steps': 1000,  # Ca n be increased to gather more experiences before each update, beneficial for complex environments with many agents and interactions. #org: 4096
         'batch_size': 128,  # Increased size to handle the complexity and data volume from multiple agents. Adjust based on computational resources.
         'n_epochs': 10,  # The number of epochs to run the optimization over the data. This remains standard but could be adjusted for finer tuning.
-        'gamma': 0.9975,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
+        'gamma': 0.998,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
         'gae_lambda': 0.92,  # Slightly lower to increase bias for more stable but potentially less accurate advantage estimates. Adjust based on variance in reward signals.
         'clip_range': lambda epoch: 0.1 + 0.15 / (1.0 + 0.1 * epoch), #lambda epoch: 0.1 + 0.15 * (0.98 ** epoch),  # Dynamic clipping range to gradually focus more on exploitation over exploration.
         'clip_range_vf': None,  # If None, clip_range_vf is set to clip_range. This could be set to a fixed value or a schedule similar to clip_range for value function clipping.
@@ -907,7 +884,7 @@ def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fin
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'train'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
+    process_to_run = 'fine_tune'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
     model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
@@ -924,5 +901,5 @@ if __name__ == "__main__":
     elif process_to_run == 'eval_path':
         run_eval_path(model=model_choice)
     elif process_to_run == 'fine_tune':
-        run_fine_tune(model=model_choice, model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-162420.zip")
+        run_fine_tune(model=model_choice, model_path=r"models\train\waterworld_v4_20240304-133924.zip")
         
