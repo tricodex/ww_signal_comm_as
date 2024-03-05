@@ -11,7 +11,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mutual_info_score
 from sklearn.preprocessing import KBinsDiscretizer
 from scipy.stats import entropy
+from scipy.signal import welch
 import statsmodels.api as sm
+import datetime
 
 class Analysis:
     def __init__(self, actions_array): # action_aray is a list of lists, each list contains 4 elements(actionspace+id): [HorizontalThrust, VerticalThrust, CommunicationSignal, AgentID]
@@ -59,6 +61,20 @@ class Analysis:
             for result in self.mutual_info_results:
                 f.write(f'Mutual information between Agent {result[0]} and Agent {result[1]}: {result[2]}\n')
 
+    def plot_mutual_info_heatmap(self, plot_name='mutual_info_heatmap.png'):
+        mutual_info_matrix = np.zeros((len(self.unique_agents), len(self.unique_agents)))
+        for result in self.mutual_info_results:
+            mutual_info_matrix[result[0], result[1]] = result[2]
+            mutual_info_matrix[result[1], result[0]] = result[2]
+        plt.figure(figsize=(10, 8))
+        plt.imshow(mutual_info_matrix, cmap='viridis', interpolation='nearest')
+        plt.colorbar(label='Mutual Information')
+        plt.title('Mutual Information Heatmap')
+        plt.xlabel('Agent ID')
+        plt.ylabel('Agent ID')
+        plt.savefig(f'plots/analysis/{plot_name}')
+        plt.show()
+    
     def plot_movement_scatter(self, plot_name='movement_scatter_plot.png'):
         plt.figure(figsize=(8, 6))
         scatter = plt.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['AgentID'], cmap='viridis', alpha=0.5)
@@ -164,6 +180,34 @@ class Analysis:
         plt.title('Hierarchical Clustering Dendrogram')
         plt.xlabel('Sample Index')
         plt.ylabel('Distance')
+        plt.savefig(f'plots/analysis/{plot_name}')
+        plt.show()
+        
+    def save_analysis_results(self, file_name):
+        
+
+        with open(file_name, 'w') as f:
+            f.write(str(self.model.summary()) + '\n')
+
+            jb_test = sm.stats.stattools.jarque_bera(self.residuals)
+            f.write(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}\n")
+
+            bp_test = sm.stats.diagnostic.het_breuschpagan(self.residuals, self.model.model.exog)
+            f.write(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}\n")
+
+            signal_entropy = entropy(self.df['Communication'])
+            f.write(f'Entropy of Communication Signals: {signal_entropy}\n')
+            
+    def perform_time_frequency_analysis(self, plot_name):
+        frequencies, power_spectral_density = welch(self.df['Communication'], fs=1.0, window='hanning', nperseg=1024, scaling='spectrum')
+        frequencies, power_spectral_density = welch(self.df['Communication'], fs=1.0, window='hann', nperseg=1024, scaling='spectrum')
+
+        plt.figure(figsize=(10, 6))
+        plt.semilogy(frequencies, power_spectral_density)
+        plt.title('Power Spectral Density of Communication Signals')
+        plt.xlabel('Frequency [Hz]')
+        plt.ylabel('Power/Frequency [V^2/Hz]')
+        
         plt.savefig(f'plots/analysis/{plot_name}')
         plt.show()
 
