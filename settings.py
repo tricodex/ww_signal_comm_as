@@ -15,12 +15,12 @@ env_kwargs = {
     "evader_speed": 0.01,  # food speed, org: 0.01
     "poison_speed": 0.075,  # poison speed, org: 0.01
     "poison_reward": -10,  # reward for pursuer consuming a poison object (typically negative)
-    "food_reward": 90.0,  # reward for pursuers consuming a food object
+    "food_reward": 100.0,  # reward for pursuers consuming a food object
     "encounter_reward": 0.015,  # reward for a pursuer colliding with a food object org: 0.01
     "thrust_penalty": -0.01, #-0.01, #-0.5,  # scaling factor for the negative reward used to penalize large actions
     "local_ratio": 0.0,  # Proportion of reward allocated locally vs distributed globally among all agents (vs 1.0)
     "speed_features": True,  # toggles whether pursuing archea (agent) sensors detect speed of other objects and archea
-    "max_cycles": 1000  # After max_cycles steps all agents will return done; maybe 98304?
+    "max_cycles": 2000  # After max_cycles steps all agents will return done; maybe 98304?
 }
 
 # Hyperparameter space for PPO
