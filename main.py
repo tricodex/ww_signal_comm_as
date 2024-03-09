@@ -185,13 +185,10 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
 
     if model_name == "PPO":
         model = PPO(PPOMlpPolicy, env, verbose=2, **hyperparam_kwargs) #policy_kwargs=policy_kwargs_ppo, **hyperparam_kwargs) 
-    elif model_name == "SAC":
-        
-        
-
-        model = SAC(SACMlpPolicy, env, verbose=3, policy_kwargs=policy_kwargs_sac, **hyperparam_kwargs)   
+    elif model_name == "SAC" and process_to_run != "train":
+        model = SAC(SACMlpPolicy, env, verbose=2, **hyperparam_kwargs) # policy_kwargs=policy_kwargs_sac, **hyperparam_kwargs)   
     elif model_name == 'SAC' and process_to_run == "train":
-        model = SAC(SACMlpPolicy, env, verbose=3, buffer_size=10000 **hyperparam_kwargs)
+        model = SAC(SACMlpPolicy, env, verbose=2, **hyperparam_kwargs)
     else:
         raise ValueError(f"Invalid model name: {model_name}")
 
@@ -212,8 +209,10 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     
     print(env.unwrapped.metadata)
     
+    n_pursuers = env_kwargs["n_pursuers"]
+    
     # Log file path
-    log_file_path = os.path.join("logs", "tracking", f"trainings_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}.txt")
+    log_file_path = os.path.join("logs", "tracking", f"trainings_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_a:{n_pursuers}.txt")
     
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -294,7 +293,40 @@ def fine_tune_model(env_fn, model_name, model_subdir, model_path, steps=100_000,
     print(f"Fine-tuned model saved to {fine_tuned_model_path}")
 
     print(f"Finished fine-tuning on {str(env.unwrapped.metadata['name'])}. Duration: {end_time - start_time}")
+    
+    print(env.unwrapped.metadata)
+    
+    n_pursuers = env_kwargs["n_pursuers"]
+    
+    # Log file path
+    log_file_path = os.path.join("logs", "tracking", f"trainings_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_finetune__a:{n_pursuers}.txt")
+    
+    # Create directories if they don't exist
+    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+
+    # Log env_kwargs, hyperparam_kwargs, and policy_kwargs
+    with open(log_file_path, "a") as log_file:
+        log_file.write(f"Fine-tuning on {str(env.unwrapped.metadata['name'])} with {model_choice} for {steps} steps in {steps/1000} episodes.\n")
+        log_file.write("env_kwargs:\n")
+        log_file.write(str(env_kwargs))
+        log_file.write("\n\n")
+
+        log_file.write("hyperparam_kwargs:\n")
+        log_file.write(str(hyperparam_kwargs))
+        log_file.write("\n\n")
+        
+
+    with open(log_file_path, "a") as log_file:
+        log_file.write(f"Model saved to {fine_tuned_model_path}\n")
+        log_file.write("Model has been saved.\n")
+        log_file.write(f"Finished fine-tuning on {str(env.unwrapped.metadata['name'])}.\n")
+        log_file.write(f"Fin-tuning duration: {end_time - start_time}\n")
+        
+    
     env.close()
+    
+    eval_with_model_path(env_fn, fine_tuned_model_path, model_name, num_games=10, render_mode=None, analysis= False)
+    eval_with_model_path(env_fn, fine_tuned_model_path, model_name, num_games=1, render_mode="human", analysis= False)
 
 
 def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_mode=None, analysis= False):
@@ -361,222 +393,6 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
     print(f"Total Avg reward: {total_avg_reward}")
     print(f"Overall Avg reward: {overall_avg_reward}")
 
-    # # Plotting total rewards
-    # os.makedirs('plots/eval', exist_ok=True)
-    # plt.figure()
-    # plt.bar(total_rewards.keys(), total_rewards.values())
-    # plt.xlabel('Agents')
-    # plt.ylabel('Total Rewards')
-    # plt.title('Total Rewards per Agent in Waterworld Simulation')
-    # plot_name = f'{model_name}_rewards_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/eval/{plot_name}')
-    
-    # # #print shape and type of actions
-    # print("Shape of actions: ", np.shape(actions))
-    # print("Type of actions: ", type(actions))
-    
-    
-    # # Convert the list to a numpy array
-    # actions_array = np.array(actions)
-
-    # # Extract components
-    # horizontal_movements = actions_array[:, 0]
-    # vertical_movements = actions_array[:, 1]
-    # communication_signals = actions_array[:, 2]
-    # agent_ids = actions_array[:, 3]
-
-    # # Color-coded Scatter Plot based on Agent ID
-    # plt.figure(figsize=(8, 6))
-    # scatter = plt.scatter(horizontal_movements, vertical_movements, c=agent_ids, cmap='viridis', alpha=0.5)
-    # plt.colorbar(scatter, label='Agent ID')
-    # plt.title('Movement Scatter Plot Color-coded by Agent ID')
-    # plt.xlabel('Horizontal Movement')
-    # plt.ylabel('Vertical Movement')
-    # plt.grid(True)
-    # plot_name = f'movement_scatter_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/hvi/{plot_name}')
-    # plt.show()
-
-    # # 3D Scatter Plot incorporating Communication Signal
-    # fig = plt.figure(figsize=(10, 8))
-    # ax = fig.add_subplot(111, projection='3d')
-    # scatter = ax.scatter(horizontal_movements, vertical_movements, communication_signals, c=agent_ids, cmap='viridis', alpha=0.5)
-    # fig.colorbar(scatter, ax=ax, label='Agent ID')
-    # ax.set_title('3D Scatter Plot of Movements and Communication Signal, Color-coded by Agent ID')
-    # ax.set_xlabel('Horizontal Movement')
-    # ax.set_ylabel('Vertical Movement')
-    # ax.set_zlabel('Communication Signal')
-    # plot_name = f'movement_communication_scatter_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/hvsi/{plot_name}')
-    # plt.show()
-    
-    # from sklearn.linear_model import LinearRegression
-    # from sklearn.decomposition import PCA
-    # from sklearn.cluster import KMeans
-    # from sklearn.preprocessing import StandardScaler
-    # import pandas as pd
-    # import statsmodels.api as sm
-    # from statsmodels.stats.outliers_influence import variance_inflation_factor
-    # from scipy import stats
-    # from scipy.signal import welch
-    # from scipy.stats import entropy
-    # from sklearn.metrics import mutual_info_score
-    # from sklearn.preprocessing import KBinsDiscretizer
-    
-
-    # # Convert to DataFrame for easier manipulation
-    # df = pd.DataFrame(actions_array, columns=['Horizontal', 'Vertical', 'Communication', 'AgentID'])
-
-    # # Regression Analysis: Predicting Horizontal Movement based on Communication Signal
-    # X = df[['Communication']]  # Predictor variable
-    # y = df['Horizontal']       # Response variable
-    # regression_model = LinearRegression()
-    # regression_model.fit(X, y)
-    # df['Predicted_Horizontal'] = regression_model.predict(X)
-
-    # # PCA: Reducing to 2 principal components for visualization
-    # scaler = StandardScaler()
-    # scaled_features = scaler.fit_transform(df[['Horizontal', 'Vertical', 'Communication']])  # Standardizing features
-    # pca = PCA(n_components=2)
-    # pca_components = pca.fit_transform(scaled_features)
-    # pca_df = pd.DataFrame(data=pca_components, columns=['Principal Component 1', 'Principal Component 2'])
-    # pca_df['AgentID'] = df['AgentID']
-
-    # # Agent Behavior Modeling: Clustering based on action vectors
-    # # Using KMeans as an example clustering algorithm
-    # kmeans = KMeans(n_clusters=4, random_state=0)  # Assuming we want to cluster into the number of agents
-    # cluster_labels = kmeans.fit_predict(scaled_features)
-    # df['Cluster'] = cluster_labels
-
-    # # Plotting the results
-    # # Regression result
-    # plt.figure(figsize=(10, 6))
-    # plt.scatter(df['Communication'], df['Horizontal'], alpha=0.5)
-    # plt.plot(df['Communication'], df['Predicted_Horizontal'], color='red', linewidth=2)
-    # plt.title('Regression: Predicting Horizontal Movement from Communication Signal')
-    # plt.xlabel('Communication Signal')
-    # plt.ylabel('Horizontal Movement')
-    # plot_name = f'regression_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/analysis/{plot_name}')
-    # plt.show()
-
-    # # PCA result
-    # plt.figure(figsize=(10, 6))
-    # plt.scatter(pca_df['Principal Component 1'], pca_df['Principal Component 2'], c=pca_df['AgentID'], alpha=0.5)
-    # plt.title('PCA: 2 Principal Components of Action Space')
-    # plt.xlabel('Principal Component 1')
-    # plt.ylabel('Principal Component 2')
-    # plt.colorbar(label='Agent ID')
-    # plot_name = f'pca_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/analysis/{plot_name}')
-    # plt.show()
-
-    # # Clustering result
-    # plt.figure(figsize=(10, 6))
-    # plt.scatter(df['Horizontal'], df['Vertical'], c=df['Cluster'], alpha=0.5)
-    # plt.title('Clustering: Agent Behavior Modeling')
-    # plt.xlabel('Horizontal Movement')
-    # plt.ylabel('Vertical Movement')
-    # plt.colorbar(label='Cluster')
-    # plot_name = f'clustering_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/analysis/{plot_name}')
-    # plt.show()
-    
-    # # Conduct regression analysis for horizontal movements predicted by communication signals
-    # # First, prepare the data for statsmodels
-    # X = sm.add_constant(communication_signals)  # Adds a constant term to the predictor
-    # y = horizontal_movements
-
-    # # Fit the regression model
-    # model = sm.OLS(y, X).fit()
-
-    # # Residual Analysis
-    # residuals = model.resid
-
-    # # Entropy of Communication Signals
-    # signal_entropy = entropy(df['Communication'])
-
-    # # Print the results
-    # print(f'Entropy of Communication Signals: {signal_entropy}')
-
-    
-  
-
-    # # Plot for visual inspection of homoscedasticity
-    # plt.scatter(model.predict(X), residuals)
-    # plt.axhline(y=0, color='r', linestyle='--')
-    # plt.xlabel('Predicted Values')
-    # plt.ylabel('Residuals')
-    # plt.title('Residuals vs Predicted Values')
-    # plot_name = f'residuals_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/analysis/{plot_name}')
-    # plt.show()
-
-    # # Histogram of residuals
-    # plt.hist(residuals, bins=20)
-    # plt.xlabel('Residuals')
-    # plt.ylabel('Frequency')
-    # plt.title('Histogram of Residuals')
-    # plot_name = f'residuals_histogram_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/analysis/{plot_name}')
-    # plt.show()
-
-    # # Q-Q plot for normality of residuals
-    # fig = sm.qqplot(residuals, line ='45')
-    # plt.title('Q-Q Plot of Residuals')
-    # plot_name = f'residuals_qq_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.savefig(f'plots/analysis/{plot_name}')
-    # plt.show()
-    
-    
-    
-
-    # # Cross-Correlation Analysis
-    # # Assuming we have communication signals from two different agents
-    # communication_agent_1 = df[df['AgentID'] == 0]['Communication']
-    # communication_agent_2 = df[df['AgentID'] == 1]['Communication']
-    # cross_correlation = np.correlate(communication_agent_1, communication_agent_2, mode='full')
-
-    # # Plot Cross-Correlation
-    # lags = np.arange(-len(communication_agent_1) + 1, len(communication_agent_2))
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(lags, cross_correlation)
-    # plt.title('Cross-Correlation of Communication Signals Between Two Agents')
-    # plt.xlabel('Lag')
-    # plt.ylabel('Cross-correlation')
-    # plot_name = f'cross_correlation_plot_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}.png'
-    # plt.show()
-    
-    # def calculate_mutual_information(signal1, signal2, n_bins=10):
-    #     """
-    #     Calculate the mutual information between two continuous signals by discretizing them.
-
-    #     Parameters:
-    #     - signal1: np.ndarray, the first signal.
-    #     - signal2: np.ndarray, the second signal.
-    #     - n_bins: int, the number of bins to use for discretizing the signals.
-
-    #     Returns:
-    #     - mi: float, the calculated mutual information.
-    #     """
-
-    #     # Ensure the signals are numpy arrays
-    #     signal1 = np.array(signal1)
-    #     signal2 = np.array(signal2)
-
-    #     # Discretize the signals
-    #     est = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='uniform')
-    #     signal1_discretized = est.fit_transform(signal1.reshape(-1, 1)).flatten()
-    #     signal2_discretized = est.fit_transform(signal2.reshape(-1, 1)).flatten()
-
-    #     # Calculate mutual information
-    #     mi = mutual_info_score(signal1_discretized, signal2_discretized)
-
-    #     return mi
-
-    
-    # mutual_information = calculate_mutual_information(communication_agent_1, communication_agent_2)
-    # print(f'Mutual Information between two communication signals: {mutual_information}')
     
     if analysis == True:
 
@@ -595,7 +411,7 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # Optionally, save mutual information results to a file
-        analysis.save_mutual_info_results(filepath=f'mutual_information_results_{current_datetime}.txt')
+        analysis.save_mutual_info_results(filepath=f'plots/analysis/mutual_information_results_{current_datetime}.txt')
 
         # Apply DBSCAN and Hierarchical clustering
         analysis.apply_dbscan(eps=0.5, min_samples=5)
@@ -615,57 +431,6 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         analysis.save_analysis_results(file_name=f'plots/analysis/analysis_results_{current_datetime}.txt')
         analysis.perform_time_frequency_analysis(plot_name = f'psd_plot_{current_datetime}.png')
 
-    
-        # actions_array = np.array(actions)  # Convert your dataset to a numpy array
-
-        # # Instantiate the Analysis class with your actions array
-        # analysis = Analysis(actions_array)
-
-        # # Perform mutual information calculation between all pairs of agents
-        # analysis.calculate_mutual_info_results()
-
-        # # Print mutual information results to console
-        # analysis.print_mutual_info_results()
-        
-        # current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-
-        # # Optionally, save mutual information results to a file
-        # analysis.save_mutual_info_results(filepath=f'mutual_information_results{current_datetime}.txt')
-
-        # # Plot various analyses and visualizations
-        
-        # analysis.plot_movement_scatter(plot_name=f'movement_scatter_plot_{current_datetime}.png')
-        # analysis.plot_movement_communication_scatter(plot_name=f'movement_communication_scatter_plot_{current_datetime}.png')
-        # analysis.plot_pca_results(plot_name=f'pca_plot_{current_datetime}.png')
-        # analysis.plot_clustering_results(plot_name=f'clustering_plot_{current_datetime}.png')
-        # analysis.plot_residuals_vs_predicted(plot_name=f'residuals_vs_predicted_plot_{current_datetime}.png')
-        # analysis.plot_residuals_histogram(plot_name=f'residuals_histogram_{current_datetime}.png')
-        # analysis.plot_residuals_qq_plot(plot_name=f'residuals_qq_plot_{current_datetime}.png')
-
-    
-
-
-    # Mutual Information
-    # Here, a function to calculate mutual information is needed
-    # This is a placeholder for demonstration purposes
-    # def calculate_mutual_information(signal1, signal2):
-    #     # Mutual information calculation here
-    #     return mi
-
-    # mutual_information = calculate_mutual_information(communication_agent_1, communication_agent_2)
-    
-    # # Print the summary of the regression model
-    # print(model.summary())
-
-    # # Test for normality of residuals
-    # jb_test = sm.stats.stattools.jarque_bera(residuals)
-    # print(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}")
-
-    # # Test for homoscedasticity
-    # bp_test = sm.stats.diagnostic.het_breuschpagan(residuals, model.model.exog)
-    # print(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}")
-
-    
     
 
     return overall_avg_reward
@@ -757,7 +522,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 100000, 1000
+    episodes, episode_lengths = 20000, 1000
     total_steps = episodes * episode_lengths
     
     
@@ -781,8 +546,8 @@ def run_train(model='PPO'):
        
     sac_hyperparams = {
         'learning_rate': lambda epoch: max(2.5e-4 * (0.85 ** epoch), 1e-5),  # Learning rate for Adam optimizer, affecting all networks (Q-values, Actor, and Value function). 
-        'batch_size': 256,  # Size of minibatch for each gradient update, influencing the stability and speed of learning.
-        'gamma': 0.999,  # Discount factor, impacting the present value of future rewards, closer to 1 makes future rewards more valuable.
+        'batch_size': 64,  # Size of minibatch for each gradient update, influencing the stability and speed of learning.
+        'gamma': 0.998,  # Discount factor, impacting the present value of future rewards, closer to 1 makes future rewards more valuable.
         'tau': 0.005,  # Soft update coefficient for target networks, balancing between stability and responsiveness.
         'ent_coef': 'auto',  # Entropy regularization coefficient, 'auto' allows automatic adjustment for exploration-exploitation balance.
         'target_entropy': 'auto',  # Target entropy for automatic entropy coefficient adjustment, guiding exploration.
@@ -811,23 +576,23 @@ def run_train(model='PPO'):
 def run_eval(model='PPO'):
     eval(env_fn, model, num_games=1, render_mode="human")
 
-def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240304-133924.zip"): # models\train\waterworld_v4_20240301-081206.zip
-    #eval_with_model_path(env_fn, path, model, num_games=8, render_mode=None, analysis= False)
-    eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= True)
+def run_eval_path(model='PPO',  path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240308-201643.zip"): # models\train\waterworld_v4_20240301-081206.zip
+    #eval_with_model_path(env_fn, path, model, num_games=10, render_mode=None, analysis= False)
+    eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= False)
     
 
 
 # Add a function to execute fine-tuning
-def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240304-133924.zip"):
-    episodes, episode_lengths = 25000, 2000
+def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240308-201643.zip"):
+    episodes, episode_lengths = 20000, 1500
     total_steps = episodes * episode_lengths
     
     ppo_hyperparams = {
         'learning_rate': lambda epoch: max(2.5e-4 * (0.85 ** epoch), 1e-5),  # Adaptive learning rate decreasing over epochs to fine-tune learning as it progresses. The lower bound ensures learning doesn't halt.
-        'n_steps': 1000,  # Ca n be increased to gather more experiences before each update, beneficial for complex environments with many agents and interactions. #org: 4096
+        'n_steps': 600,  # Ca n be increased to gather more experiences before each update, beneficial for complex environments with many agents and interactions. #org: 4096
         'batch_size': 128,  # Increased size to handle the complexity and data volume from multiple agents. Adjust based on computational resources.
         'n_epochs': 10,  # The number of epochs to run the optimization over the data. This remains standard but could be adjusted for finer tuning.
-        'gamma': 0.998,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
+        'gamma': 0.9999,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
         'gae_lambda': 0.92,  # Slightly lower to increase bias for more stable but potentially less accurate advantage estimates. Adjust based on variance in reward signals.
         'clip_range': lambda epoch: 0.1 + 0.15 / (1.0 + 0.1 * epoch), #lambda epoch: 0.1 + 0.15 * (0.98 ** epoch),  # Dynamic clipping range to gradually focus more on exploitation over exploration.
         'clip_range_vf': None,  # If None, clip_range_vf is set to clip_range. This could be set to a fixed value or a schedule similar to clip_range for value function clipping.
@@ -840,22 +605,6 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240304-
         
     }
     
-    # ppo_hyperparams = {
-    #     'learning_rate': lambda epoch: max(2.5e-4 * (0.85 ** epoch), 1e-5),
-    #     'n_steps': 800,
-    #     'batch_size': 128,
-    #     'n_epochs': 10,
-    #     'gamma': 0.998,
-    #     'gae_lambda': 0.92,
-    #     'clip_range': lambda epoch: 0.1 + 0.15 / (1.0 + 0.1 * epoch),
-    #     'clip_range_vf': None,
-    #     'ent_coef': 0.005,
-    #     'vf_coef': 0.5,
-    #     'max_grad_norm': 0.5,
-    #     'use_sde': True,
-    #     'sde_sample_freq': 64,
-    #     'normalize_advantage': True,
-    # }
 
     sac_hyperparams = {
         'learning_rate': lambda epoch: max(2.5e-4 * (0.85 ** epoch), 1e-5),
@@ -867,7 +616,7 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240304-
         'use_sde': True,
         'sde_sample_freq': -1,
         'learning_starts': 500,
-        'buffer_size': 500,
+        'buffer_size': 1000,
         'gradient_steps': -1,
         'optimize_memory_usage': False,
         'replay_buffer_class': None,
@@ -881,10 +630,9 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240304-
     fine_tune_model(env_fn, model, "fine_tuned", model_path, steps=total_steps, seed=0, **hyperparam_kwargs)
 
 
-
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'fine_tune'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
+    process_to_run = 'train'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
     model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
@@ -901,5 +649,5 @@ if __name__ == "__main__":
     elif process_to_run == 'eval_path':
         run_eval_path(model=model_choice)
     elif process_to_run == 'fine_tune':
-        run_fine_tune(model=model_choice, model_path=r"models\train\waterworld_v4_20240304-133924.zip")
+        run_fine_tune(model=model_choice, model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240308-201643.zip")
         
