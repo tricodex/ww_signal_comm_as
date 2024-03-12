@@ -416,7 +416,7 @@ class WaterworldBase:
 
     def step(self, action, agent_id, is_last):
         # Extract movement and communication components from the action
-        # movement_action = np.asarray(action[:2]) * self.pursuer_max_accel
+        
         movement_action = action[:2] * self.pursuer_max_accel
         communication_action = action[2]
 
