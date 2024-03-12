@@ -110,12 +110,7 @@ class raw_env(AECEnv, EzPickle):
         if self.render_mode == "human":
             self.render()
             
-    # def get_communication_data(self, agent):
-    #     if self.has_reset:
-    #         agent_id = self.agent_name_mapping[agent]
-    #         return self.env.communication_data
-    #     else:
-    #         return None
+   
 
     def observe(self, agent):
         return self.env.observe(self.agent_name_mapping[agent])
