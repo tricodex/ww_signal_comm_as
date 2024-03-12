@@ -212,7 +212,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     n_pursuers = env_kwargs["n_pursuers"]
     
     # Log file path
-    log_file_path = os.path.join("logs", "tracking", f"trainings_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_a:{n_pursuers}.txt")
+    log_file_path = os.path.join("logs", "tracking", f"train_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_a{n_pursuers}.txt")
     
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -264,7 +264,7 @@ def fine_tune_model(env_fn, model_name, model_subdir, model_path, steps=100_000,
     env = env_fn.parallel_env(**env_kwargs)
     env.reset(seed=seed)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 32, num_cpus=6, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 16, num_cpus=3, base_class="stable_baselines3")
 
     if not os.path.exists(model_path):
         raise ValueError(f"Model file not found at {model_path}")
@@ -299,7 +299,7 @@ def fine_tune_model(env_fn, model_name, model_subdir, model_path, steps=100_000,
     n_pursuers = env_kwargs["n_pursuers"]
     
     # Log file path
-    log_file_path = os.path.join("logs", "tracking", f"trainings_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_finetune__a:{n_pursuers}.txt")
+    log_file_path = os.path.join("logs", "tracking", f"train_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_finetune__a{n_pursuers}.txt")
     
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -522,7 +522,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 20000, 1000
+    episodes, episode_lengths = 100, 1000
     total_steps = episodes * episode_lengths
     
     
@@ -551,8 +551,6 @@ def run_train(model='PPO'):
         'tau': 0.005,  # Soft update coefficient for target networks, balancing between stability and responsiveness.
         'ent_coef': 'auto',  # Entropy regularization coefficient, 'auto' allows automatic adjustment for exploration-exploitation balance.
         'target_entropy': 'auto',  # Target entropy for automatic entropy coefficient adjustment, guiding exploration.
-        'use_sde': True,  # Enables generalized State Dependent Exploration (gSDE) for enhanced exploration.
-        'sde_sample_freq': -1,  # Frequency of sampling new noise matrix for gSDE, -1 means only at the start of the rollout.
         'learning_starts': 500,  # Number of steps collected before learning starts, allowing for initial exploration.
         'buffer_size': 500,  # Size of the replay buffer, larger sizes allow for a more diverse set of experiences.
         
@@ -560,9 +558,11 @@ def run_train(model='PPO'):
         'optimize_memory_usage': False,  # While memory efficient, it can add complexity; consider based on available resources.
         'replay_buffer_class': None,  # Default replay buffer is generally sufficient unless specific modifications are needed.
         'replay_buffer_kwargs': None,  # Additional arguments for the replay buffer, if using a custom class.
+        # 'use_sde': True,  # Enables generalized State Dependent Exploration (gSDE) for enhanced exploration.
+        # 'sde_sample_freq': -1,  # Frequency of sampling new noise matrix for gSDE, -1 means only at the start of the rollout.
         
         
-        'device': 'auto',  # Utilizes GPU if available for faster computation.
+        'device': 'cuda',  # Utilizes GPU if available for faster computation.
         
     }
 
@@ -576,15 +576,15 @@ def run_train(model='PPO'):
 def run_eval(model='PPO'):
     eval(env_fn, model, num_games=1, render_mode="human")
 
-def run_eval_path(model='PPO',  path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240308-201643.zip"): # models\train\waterworld_v4_20240301-081206.zip
-    #eval_with_model_path(env_fn, path, model, num_games=10, render_mode=None, analysis= False)
+def run_eval_path(model='PPO',  path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-182958.zip"): # models\train\waterworld_v4_20240301-081206.zip
+    eval_with_model_path(env_fn, path, model, num_games=10, render_mode=None, analysis= False)
     eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= False)
     
 
 
 # Add a function to execute fine-tuning
-def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240308-201643.zip"):
-    episodes, episode_lengths = 20000, 1500
+def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-182958.zip"):
+    episodes, episode_lengths = 30000, 100
     total_steps = episodes * episode_lengths
     
     ppo_hyperparams = {
@@ -633,7 +633,7 @@ def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fin
 if __name__ == "__main__":
     env_fn = waterworld_v4  
     process_to_run = 'train'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
-    model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
+    model_choice = 'SAC'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
         process_to_run = 'eval'
@@ -649,5 +649,5 @@ if __name__ == "__main__":
     elif process_to_run == 'eval_path':
         run_eval_path(model=model_choice)
     elif process_to_run == 'fine_tune':
-        run_fine_tune(model=model_choice, model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240308-201643.zip")
+        run_fine_tune(model=model_choice, model_path=r"models\fine_tuned\fine_tuned\PPO_fine_tuned_20240303-182958.zip")
         
