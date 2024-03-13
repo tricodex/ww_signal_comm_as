@@ -61,20 +61,7 @@ class Analysis:
             for result in self.mutual_info_results:
                 f.write(f'Mutual information between Agent {result[0]} and Agent {result[1]}: {result[2]}\n')
 
-    def plot_mutual_info_heatmap(self, plot_name='mutual_info_heatmap.png'):
-        mutual_info_matrix = np.zeros((len(self.unique_agents), len(self.unique_agents)))
-        for result in self.mutual_info_results:
-            mutual_info_matrix[result[0], result[1]] = result[2]
-            mutual_info_matrix[result[1], result[0]] = result[2]
-        plt.figure(figsize=(10, 8))
-        plt.imshow(mutual_info_matrix, cmap='viridis', interpolation='nearest')
-        plt.colorbar(label='Mutual Information')
-        plt.title('Mutual Information Heatmap')
-        plt.xlabel('Agent ID')
-        plt.ylabel('Agent ID')
-        plt.savefig(f'plots/analysis/{plot_name}')
-        plt.show()
-    
+
     def plot_movement_scatter(self, plot_name='movement_scatter_plot.png'):
         plt.figure(figsize=(8, 6))
         scatter = plt.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['AgentID'], cmap='viridis', alpha=0.5)
