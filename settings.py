@@ -40,12 +40,12 @@ env_kwargs = {
     "evader_speed": 0.01,
     "poison_speed": 0.075,
     "poison_reward": -10,
-    "food_reward": 90.0,
+    "food_reward": 70.0,
     "encounter_reward": 0.015,
     "thrust_penalty": -0.01,
     "local_ratio": 0.0,
     "speed_features": True,
-    "max_cycles": 1500
+    "max_cycles": 1000
 }
 
 
