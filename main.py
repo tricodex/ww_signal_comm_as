@@ -427,7 +427,7 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         analysis.plot_residuals_qq_plot(plot_name=f'residuals_qq_plot_{current_datetime}.png')
         analysis.plot_dbscan_results(plot_name=f'dbscan_clustering_plot_{current_datetime}.png')
         analysis.plot_dendrogram(plot_name=f'dendrogram_plot_{current_datetime}.png')
-        analysis.plot_mutual_info_heatmap(plot_name=f'mutual_info_heatmap_{current_datetime}.png')
+        #analysis.plot_mutual_info_heatmap(plot_name=f'mutual_info_heatmap_{current_datetime}.png')
         analysis.save_analysis_results(file_name=f'plots/analysis/analysis_results_{current_datetime}.txt')
         analysis.perform_time_frequency_analysis(plot_name = f'psd_plot_{current_datetime}.png')
 
