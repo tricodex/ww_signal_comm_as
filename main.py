@@ -212,7 +212,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
     n_pursuers = env_kwargs["n_pursuers"]
     
     # Log file path
-    log_file_path = os.path.join("logs", "tracking", f"train_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_a{n_pursuers}.txt")
+    log_file_path = os.path.join("logs", "tracking", f"train_{env.unwrapped.metadata.get('name')}_{time.strftime('%Y%m%d-%H%M%S')}_a{n_pursuers}_{model_name}.txt")
     
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
@@ -522,7 +522,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 100, 1000
+    episodes, episode_lengths = 20000, 1000
     total_steps = episodes * episode_lengths
     
     
@@ -531,7 +531,7 @@ def run_train(model='PPO'):
         'n_steps': 500,  # Ca n be increased to gather more experiences before each update, beneficial for complex environments with many agents and interactions. #org: 4096
         'batch_size': 128,  # Increased size to handle the complexity and data volume from multiple agents. Adjust based on computational resources.
         'n_epochs': 10,  # The number of epochs to run the optimization over the data. This remains standard but could be adjusted for finer tuning.
-        'gamma': 0.9975,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
+        'gamma': 0.998,  # Slightly higher to put more emphasis on future rewards, which is crucial in environments where long-term strategies are important.
         'gae_lambda': 0.92,  # Slightly lower to increase bias for more stable but potentially less accurate advantage estimates. Adjust based on variance in reward signals.
         'clip_range': lambda epoch: 0.1 + 0.15 / (1.0 + 0.1 * epoch), #lambda epoch: 0.1 + 0.15 * (0.98 ** epoch),  # Dynamic clipping range to gradually focus more on exploitation over exploration.
         'clip_range_vf': None,  # If None, clip_range_vf is set to clip_range. This could be set to a fixed value or a schedule similar to clip_range for value function clipping.
@@ -633,7 +633,7 @@ def run_fine_tune(model='PPO', model_path=r"models\fine_tuned\fine_tuned\PPO_fin
 if __name__ == "__main__":
     env_fn = waterworld_v4  
     process_to_run = 'train'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
-    model_choice = 'SAC'  # Options: 'Heuristic', 'PPO', 'SAC'
+    model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
         process_to_run = 'eval'
