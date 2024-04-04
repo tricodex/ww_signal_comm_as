@@ -11,10 +11,6 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from scipy.spatial import distance as ssd
 from datetime import datetime
-
-# import pyautogui
-# import cv2
-
 from waterworld_models import (
     Evaders,
     Obstacle,
@@ -750,16 +746,7 @@ class WaterworldBase:
         del observation
 
         if self.render_mode == "human":
-            # # Get the current datetime
-            # current_datetime = datetime.now()
-
-            # # Create the visuals folder if it doesn't exist
-            # folder_path = "visuals"
-            # os.makedirs(folder_path, exist_ok=True)
-
-            # # Save the recording with the current datetime as the filename
-            # filename = current_datetime.strftime("%Y-%m-%d_%H-%M-%S") + ".avi"
-            # file_path = os.path.join(folder_path, filename)
+            
             pygame.event.pump()
             pygame.display.update()
         return (
