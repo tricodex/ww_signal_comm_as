@@ -26,7 +26,7 @@
 
 #4 # Pursuers setup
 env_kwargs = {
-    "n_pursuers": 4,
+    "n_pursuers": 12,
     "n_evaders": 6,
     "n_poisons": 8,
     "n_coop": 2,
@@ -38,7 +38,7 @@ env_kwargs = {
     "obstacle_coord": [(0.5, 0.5)],
     "pursuer_max_accel": 0.01,
     "evader_speed": 0.01,
-    "poison_speed": 0.075,
+    "poison_speed": 0.15,
     "poison_reward": -10,
     "food_reward": 70.0,
     "encounter_reward": 0.015,
