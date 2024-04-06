@@ -45,11 +45,11 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
        
     print(f"Starting training on {str(env.metadata['name'])}.")
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 32, num_cpus=6, base_class="stable_baselines3") # [1]=8
+    env = ss.concat_vec_envs_v1(env, 16, num_cpus=4, base_class="stable_baselines3") # [1]=8
     
     
-    
-    policy_kwargs = dict(net_arch=[128, 128])
+    # policy_kwargs = dict(net_arch=[128, 64]) :D 8 ,8, 0.04setup
+    policy_kwargs = dict(net_arch=[128, 64])
 
 
     if model_name == "PPO":
@@ -325,7 +325,7 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
                 else:
                     action, _states = model.predict(obs, deterministic=True)
                     actionid = np.append(action, [reward, int(agent[-1])])  # Append int(agent[-1]) to the action array
-                    print(actionid)
+                    #print(actionid)
                     actions.append(actionid)
                     
                     if model_name == "SAC":
@@ -338,6 +338,10 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         for agent in episode_rewards:
             total_rewards[agent] += episode_rewards[agent]
         episode_avg = sum(episode_rewards.values()) / len(episode_rewards)
+        
+        if i % 100 == 0:
+            print(f"Rewards for episode {i}: {episode_rewards}")
+        
         episode_avg_rewards.append(episode_avg)
         #print(f"Rewards for episode {i}: {episode_rewards}")
 
@@ -366,34 +370,22 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         actions_array = np.array(actions)  # Convert your dataset to a numpy array
 
         # Instantiate the Analysis class with your actions array and the output directory
-        analysis = Analysis(actions_array, analysis_output_dir)  # <-- Correction here
+        analysis = Analysis(actions_array, analysis_output_dir)  
 
         # Perform mutual information calculation between all pairs of agents
         analysis.calculate_mutual_info_results()
-
-        # Print mutual information results to console
         analysis.print_mutual_info_results()
-
         analysis.save_mutual_info_results(filename='mutual_information_results.txt')
-
-        # Apply DBSCAN and Hierarchical clustering
         analysis.apply_dbscan(eps=0.5, min_samples=5)
-        analysis.apply_hierarchical_clustering(method='ward')
-
-        # Plot various analyses and visualizations
-        analysis.plot_movement_scatter(plot_name='movement_scatter_plot.png')
+        analysis.apply_hierarchical_clustering()
+        analysis.plot_movement_communication_scatter(plot_name='movement_communication_scatter_plot.png')
         analysis.plot_communication_over_time(plot_name='communication_over_time.png')
         analysis.calculate_correlation_with_performance()
         analysis.plot_pca_results(plot_name='pca_plot.png')
         analysis.plot_clustering_results(plot_name='clustering_plot.png')
-        analysis.plot_residuals_vs_predicted(plot_name='residuals_vs_predicted_plot.png')
-        
         analysis.plot_dbscan_results(plot_name='dbscan_clustering_plot.png')
-        
         analysis.save_analysis_results(filename='analysis_results.txt')
         analysis.perform_time_frequency_analysis(plot_name='psd_plot.png')
-        
-        analysis.plot_autocorrelation()
 
 
     
@@ -404,7 +396,7 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
 
 # Train a model
 def run_train(model='PPO'):
-    episodes, episode_lengths = 80000, 1000
+    episodes, episode_lengths = 20000, 1000
     total_steps = episodes * episode_lengths
     
     
@@ -487,14 +479,12 @@ def run_train(model='PPO'):
 def run_eval(model='PPO'):
     eval(env_fn, model, num_games=1000, render_mode=None)
 
-def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240322-160615.zip"): # models\train\waterworld_v4_20240301-081206.zip
-    eval_with_model_path(env_fn, path, model, num_games=1, render_mode=None, analysis=False)
+def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240405-125529.zip"): # models\train\waterworld_v4_20240301-081206.zip
+    eval_with_model_path(env_fn, path, model, num_games=1, render_mode=None, analysis=True)
     #eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= False)
-    
-
 
 # Add a function to execute fine-tuning
-def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240322-160615.zip"):
+def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-125529.zip"):
     episodes, episode_lengths = 20000, 1000
     total_steps = episodes * episode_lengths
     
@@ -578,5 +568,5 @@ if __name__ == "__main__":
     elif process_to_run == 'eval_path':
         run_eval_path(model=model_choice)
     elif process_to_run == 'fine_tune':
-        run_fine_tune(model=model_choice, model_path=r"models\train\waterworld_v4_20240322-160615.zip")
+        run_fine_tune(model=model_choice, model_path=r"models\train\waterworld_v4_20240405-125529.zip")
         
