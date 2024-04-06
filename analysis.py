@@ -27,7 +27,7 @@ from scipy.cluster.hierarchy import linkage, fcluster
 from statsmodels.genmod.families import Gaussian
 from statsmodels.genmod.cov_struct import Exchangeable
 
-from statsmodels.regression.linear_model import GLS
+from sklearn.neighbors import NearestNeighbors
 
 
 class Analysis:
@@ -43,37 +43,17 @@ class Analysis:
         self.mutual_info_results = []
         self.dbscan = None
         self.linked = None
+        self.entropy_value = None
+        
+        self.communication_summary = self.df['Communication'].describe()
         
 
         os.makedirs(self.output_dir, exist_ok=True)
         self.apply_dynamic_pca()
         self.apply_pca_to_dependent_vars()
         self.regression_on_principal_components()
-        self.apply_kmeans_clustering()
         
-    # def apply_dynamic_pca(self):
-    #     """
-    #     Applies PCA to the scaled features, selecting the number of components
-    #     based on the cumulative explained variance ratio to retain at least 90% of the variance.
-    #     """
-    #     pca = PCA().fit(self.scaled_features)
-    #     cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
-    #     n_components = np.argmax(cumulative_variance >= 0.9) + 1  # Find the index at which cumulative variance >= 90%
-        
-    #     # Refit PCA with the determined number of components
-    #     pca_optimal = PCA(n_components=n_components)
-    #     self.pca_components = pca_optimal.fit_transform(self.scaled_features)
-        
-    #     # Optionally, update the DataFrame or class attributes with PCA results
-    #     for i in range(n_components):
-    #         self.df[f'PCA_Component_{i+1}'] = self.pca_components[:, i]
     
-
-    # def apply_kmeans_clustering(self):
-    #     """Applies KMeans clustering to the PCA components."""
-    #     kmeans = KMeans(n_clusters=4, random_state=0).fit(self.df[['PCA1', 'PCA2']])
-    #     self.df['Cluster'] = kmeans.labels_
-        
     def apply_dynamic_pca(self):
         pca = PCA().fit(self.scaled_features)
         cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
@@ -86,19 +66,6 @@ class Analysis:
         self.df['PCA1'] = pca_components[:, 0]
         if n_components > 1:
             self.df['PCA2'] = pca_components[:, 1]
-    
-    def apply_kmeans_clustering(self):
-        # Check if both PCA columns exist, fallback if not
-        if 'PCA1' in self.df.columns and 'PCA2' in self.df.columns:
-            pca_columns = ['PCA1', 'PCA2']
-        elif 'PCA1' in self.df.columns:
-            pca_columns = ['PCA1']
-        else:
-            print("PCA columns do not exist. Cannot apply KMeans clustering.")
-            return
-
-        kmeans = KMeans(n_clusters=4, random_state=0).fit(self.df[pca_columns])
-        self.df['Cluster'] = kmeans.labels_
 
 
     def apply_pca_to_dependent_vars(self):
@@ -122,30 +89,17 @@ class Analysis:
         plt.ylabel('PCA 2')
         plt.savefig(os.path.join(self.output_dir, plot_name))  
         plt.close()
-
-    
-
-    
+  
     def regression_on_principal_components(self):
         X = sm.add_constant(self.df['Communication'])
         self.model_pc1 = sm.OLS(self.pca_df['PC1'], X).fit()
         self.model_pc2 = sm.OLS(self.pca_df['PC2'], X).fit()
 
-        self.save_regression_results(self.model_pc1, 'regression_results_PC1.txt')
-        self.save_regression_results(self.model_pc2, 'regression_results_PC2.txt')
 
-
-
-    def save_regression_results(self, model, filename):
+    def save_results(self, filename='behavior.txt'):
         filepath = os.path.join(self.output_dir, filename)
         with open(filepath, 'w') as f:
-            # Save the regression model summary
-            f.write(model.summary().as_text() + "\n\n")
             
-            # Extra Analysis
-            
-            if model == self.model_pc1:
-
                 # Categorizing rewards
                 self.df['Interaction'] = self.df['Reward'].apply(lambda x: 'Food' if x > (69/len(self.unique_agents)) else ('Poison' if x < (-9.9/len(self.unique_agents)) else 'Neutral'))
 
@@ -162,8 +116,6 @@ class Analysis:
                 # Filter to get consecutive positive rewards
                 cooperative_moves = cooperative_moves[cooperative_moves['Reward'] > (69/len(self.unique_agents))]
                 f.write("Cooperative Moves:\n" + cooperative_moves.to_string() + "\n")
-
-                
         
 
     def save_fig(self, fig, plot_name):
@@ -171,10 +123,6 @@ class Analysis:
         fig.savefig(os.path.join(self.output_dir, plot_name))
         plt.close(fig)
         
-    
-     
-        
-    
     
     def apply_dbscan(self, eps=0.5, min_samples=5):
         self.dbscan = DBSCAN(eps=eps, min_samples=min_samples).fit(self.scaled_features)
@@ -197,8 +145,6 @@ class Analysis:
         
         return gee_results
    
-    
-    
     def generalized_estimating_equations(self):
         # GEE model for correlated movements within agents over time
         model = GEE.from_formula("Horizontal + Vertical ~ Communication", "AgentID", self.df, cov_struct=Independence())
@@ -206,13 +152,52 @@ class Analysis:
         print(result.summary())
         return result
     
+    def plot_signal_histogram(self, plot_name='signal_histogram.png'):
+        # Extract the signal column
+        signal = self.df['Communication'].values
+        # Plot histogram
+        plt.figure(figsize=(10, 6))
+        plt.hist(signal, bins=10, density=True, alpha=0.6, color='g')
+        # Add titles and labels
+        plt.title('Histogram of Communication Signals')
+        plt.xlabel('Signal Value')
+        plt.ylabel('Probability Density')
+        # Save the histogram figure
+        plt.savefig(os.path.join(self.output_dir, plot_name))
+        plt.close()
+        
+    def calculate_individual_agent_entropy(self, signal_column='Communication'):
+        """Calculates the entropy for each individual agent's signals."""
+        entropies = {}
+        for agent_id in self.unique_agents:
+            agent_signals = self.df[self.df['AgentID'] == agent_id][signal_column]
+            hist, bin_edges = np.histogram(agent_signals, bins=10, density=True)
+            probabilities = hist * np.diff(bin_edges)
+            entropy_value = entropy(probabilities[probabilities > 0], base=2)
+            entropies[agent_id] = entropy_value
+            print(f'Entropy for Agent {agent_id}: {entropy_value}')
+        return entropies
     
-    def calculate_entropy(self, signal):
-        # Calculation of entropy with error handling
-        if np.all(signal == 0) or len(np.unique(signal)) == 1:
-            return 0
-        signal_probabilities = signal / signal.sum()
-        return entropy(signal_probabilities, base=2)
+    
+    def summarize_and_calculate_entropy(self, column_index, n_bins=10):
+        # Extract the column of signals based on the given index
+        signals = self.actions_array[:, column_index]
+
+        # Display statistical summary of the signals
+        signals_series = pd.Series(signals)
+        print("Statistical summary of the signals:")
+        print(signals_series.describe())
+
+        # Calculate entropy of the signals
+        hist, bin_edges = np.histogram(signals, bins=n_bins, density=True)
+        bin_probabilities = hist * np.diff(bin_edges)
+        bin_probabilities = bin_probabilities[bin_probabilities > 0]
+        entropy_value = entropy(bin_probabilities, base=2)
+
+        # Display the calculated entropy
+        print(f"\nEntropy of the signals: {entropy_value}")
+        
+        self.entropy_value = entropy_value
     
     def apply_hierarchical_clustering(self):
         # More comprehensive use of hierarchical clustering
@@ -245,23 +230,15 @@ class Analysis:
         for result in self.mutual_info_results:
             print(f'Mutual information between Agent {result[0]} and Agent {result[1]}: {result[2]}')
 
-    def save_mutual_info_results(self, filename='mutual_information_results.txt'):
-        filepath = os.path.join(self.output_dir, filename)
-        with open(filepath, 'w') as f:
-            for result in self.mutual_info_results:
-                f.write(f'Mutual information between Agent {result[0]} and Agent {result[1]}: {result[2]}\n')
-
-                
+    
     
 
     def calculate_correlation_with_performance(self):
         communication_reward_correlation = self.df['Communication'].corr(self.df['Reward'])
 
         print(f"Correlation between Communication Signal and Performance: {communication_reward_correlation}")
-        correlation_result_path = os.path.join(self.output_dir, 'correlation_analysis.txt')
-        with open(correlation_result_path, 'w') as f:
-            f.write(f"Correlation between Communication Signal and Performance: {communication_reward_correlation}\n")
-            
+        
+        return communication_reward_correlation
                
     def plot_movement_communication_scatter(self, plot_name='movement_communication_scatter_plot.png'):
         # Normalizing the Communication signal for better visualization
@@ -311,14 +288,7 @@ class Analysis:
 
 
 
-    def plot_clustering_results(self, plot_name='clustering_plot.png'):
-        fig, ax = plt.subplots(figsize=(10, 6))  # Create a figure and axes.
-        scatter = ax.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['Cluster'], cmap='viridis', alpha=0.5)
-        plt.colorbar(scatter, ax=ax, label='Cluster')
-        ax.set_title('Clustering: Agent Behavior Modeling')
-        ax.set_xlabel('Horizontal Movement')
-        ax.set_ylabel('Vertical Movement')
-        self.save_fig(fig, plot_name)  # Pass the figure object to save_fig.
+
 
 
     def plot_dbscan_results(self, plot_name='dbscan_clustering_plot.png'):
@@ -355,6 +325,31 @@ class Analysis:
         plt.savefig(os.path.join(self.output_dir, plot_name))  
         plt.close()
         
+    def create_k_distance_plot(self, k=8, plot_name='k_distance_plot.png'):
+        """
+        Creates and saves a k-distance plot for choosing the 'eps' parameter in DBSCAN.
+        Args:
+        - k: Number of nearest neighbors to consider for the k-distance computation.
+        - plot_name: The name of the plot image file to save.
+        """
+        # Compute the k-nearest neighbor distances
+        nbrs = NearestNeighbors(n_neighbors=k).fit(self.scaled_features)
+        distances, indices = nbrs.kneighbors(self.scaled_features)
+
+        # Sort the distances
+        k_dist_sorted = np.sort(distances[:, k-1], axis=0)
+
+        # Plot the k-distance graph
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(len(k_dist_sorted)), k_dist_sorted)
+        plt.title(f"k-Distance Plot (k={k})")
+        plt.xlabel("Points sorted by distance")
+        plt.ylabel(f"Distance to {k}-th nearest neighbor")
+        plt.grid(True)
+
+        # Save the plot
+        plt.savefig(os.path.join(self.output_dir, plot_name))
+        plt.close()
     
 
         
