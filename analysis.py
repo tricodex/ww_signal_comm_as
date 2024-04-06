@@ -27,55 +27,87 @@ from scipy.cluster.hierarchy import linkage, fcluster
 from statsmodels.genmod.families import Gaussian
 from statsmodels.genmod.cov_struct import Exchangeable
 
+from statsmodels.regression.linear_model import GLS
+
 
 class Analysis:
     def __init__(self, actions_array, output_dir):
-        self.mutual_info_results = []
         self.actions_array = actions_array
-        
-        # Initialize DataFrame with specified columns
+        self.output_dir = output_dir
         self.df = pd.DataFrame(actions_array, columns=['Horizontal', 'Vertical', 'Communication', 'Reward', 'AgentID'])
-        
-        # Apply standard scaling to the relevant features
         self.scaled_features = StandardScaler().fit_transform(self.df[['Horizontal', 'Vertical', 'Communication']])
+        self.unique_agents = self.df['AgentID'].unique()
+        self.pca_df = None
+        self.model_pc1 = None
+        self.model_pc2 = None
+        self.mutual_info_results = []
+        self.dbscan = None
+        self.linked = None
         
-        # Apply PCA based on explained variance ratio
+
+        os.makedirs(self.output_dir, exist_ok=True)
         self.apply_dynamic_pca()
-        
-        # Preparing for regression analysis
-        self.X = sm.add_constant(self.df['Communication'])  # Add constant term for intercept
-        
-        # Apply multivariate OLS regression
-        self.apply_multivariate_OLS()
-        
-        # Perform clustering
+        self.apply_pca_to_dependent_vars()
+        self.regression_on_principal_components()
         self.apply_kmeans_clustering()
         
-        self.unique_agents = self.df['AgentID'].unique()
+    # def apply_dynamic_pca(self):
+    #     """
+    #     Applies PCA to the scaled features, selecting the number of components
+    #     based on the cumulative explained variance ratio to retain at least 90% of the variance.
+    #     """
+    #     pca = PCA().fit(self.scaled_features)
+    #     cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
+    #     n_components = np.argmax(cumulative_variance >= 0.9) + 1  # Find the index at which cumulative variance >= 90%
         
-        # Prepare the output directory for saving results
-        self.output_dir = output_dir
-        os.makedirs(self.output_dir, exist_ok=True)
+    #     # Refit PCA with the determined number of components
+    #     pca_optimal = PCA(n_components=n_components)
+    #     self.pca_components = pca_optimal.fit_transform(self.scaled_features)
         
-    def save_fig(self, fig, plot_name):
-        """Saves matplotlib figures in the designated output directory."""
-        fig.savefig(os.path.join(self.output_dir, plot_name))
-        plt.close(fig)
-        
-    def analyze_rewards(self):
-        # Categorizing rewards
-        self.df['Interaction'] = self.df['Reward'].apply(lambda x: 'Food' if x > 69 else ('Poison' if x < -9.9 else 'Neutral'))
+    #     # Optionally, update the DataFrame or class attributes with PCA results
+    #     for i in range(n_components):
+    #         self.df[f'PCA_Component_{i+1}'] = self.pca_components[:, i]
+    
 
-        # Aggregating results by AgentID
-        interaction_counts = self.df.groupby(['AgentID', 'Interaction']).size().unstack(fill_value=0)
-        print(interaction_counts)
+    # def apply_kmeans_clustering(self):
+    #     """Applies KMeans clustering to the PCA components."""
+    #     kmeans = KMeans(n_clusters=4, random_state=0).fit(self.df[['PCA1', 'PCA2']])
+    #     self.df['Cluster'] = kmeans.labels_
         
-    def cooperative_analysis(self):
-        # Assuming cooperation if multiple agents get positive rewards consecutively
-        cooperative_moves = self.df[self.df['Reward'] > 0].groupby('AgentID').rolling(window=2).sum()
-        cooperative_moves = cooperative_moves[cooperative_moves['Reward'] > 69] # Filter to get consecutive positive rewards
-        print(cooperative_moves)
+    def apply_dynamic_pca(self):
+        pca = PCA().fit(self.scaled_features)
+        cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
+        n_components = min(np.argmax(cumulative_variance >= 0.9) + 1, 2)  # Ensuring at most 2 components
         
+        pca_optimal = PCA(n_components=n_components)
+        pca_components = pca_optimal.fit_transform(self.scaled_features)
+        
+        # Directly assign PCA components to 'PCA1' and 'PCA2' as needed
+        self.df['PCA1'] = pca_components[:, 0]
+        if n_components > 1:
+            self.df['PCA2'] = pca_components[:, 1]
+    
+    def apply_kmeans_clustering(self):
+        # Check if both PCA columns exist, fallback if not
+        if 'PCA1' in self.df.columns and 'PCA2' in self.df.columns:
+            pca_columns = ['PCA1', 'PCA2']
+        elif 'PCA1' in self.df.columns:
+            pca_columns = ['PCA1']
+        else:
+            print("PCA columns do not exist. Cannot apply KMeans clustering.")
+            return
+
+        kmeans = KMeans(n_clusters=4, random_state=0).fit(self.df[pca_columns])
+        self.df['Cluster'] = kmeans.labels_
+
+
+    def apply_pca_to_dependent_vars(self):
+        dependent_vars = self.df[['Horizontal', 'Vertical']]
+        dependent_vars_scaled = StandardScaler().fit_transform(dependent_vars)
+        pca = PCA(n_components=2)
+        principal_components = pca.fit_transform(dependent_vars_scaled)
+        self.pca_df = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
+
     def behavior_clustering(self, plot_name='behavior_clustering.png'):
         pca_result = self.scaled_features
         
@@ -91,52 +123,59 @@ class Analysis:
         plt.savefig(os.path.join(self.output_dir, plot_name))  
         plt.close()
 
-    def apply_dynamic_pca(self):
-        """Applies PCA to the scaled features, selecting the number of components based on cumulative explained variance."""
-        pca = PCA().fit(self.scaled_features)
-        cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
-        n_components = np.where(cumulative_variance >= 0.9)[0][0] + 1  # Choose components to explain 90% of variance
-        
-        # Refit PCA with optimal number of components determined
-        pca_optimal = PCA(n_components=n_components)
-        pca_components_optimal = pca_optimal.fit_transform(self.scaled_features)
-        
-        # Update the DataFrame with the first two PCA components for potential visualization
-        for i in range(n_components):
-            self.df[f'PCA{i+1}'] = pca_components_optimal[:, i]
+    
 
-    def apply_multivariate_OLS(self):
-        """Performs separate OLS regression for horizontal and vertical movements against communication signal."""
-        # For simplicity and clarity, handling the horizontal movement
-        y_horiz = self.df['Horizontal']
-        model_horiz = sm.OLS(y_horiz, self.X).fit()
-        
-        # Handling the vertical movement
-        y_vert = self.df['Vertical']
-        model_vert = sm.OLS(y_vert, self.X).fit()
-        
-        # Storing predictions for visualization or further analysis
-        self.df['Predicted_Horizontal'] = model_horiz.predict(self.X)
-        self.df['Predicted_Vertical'] = model_vert.predict(self.X)
-        
-        # Compute residuals for horizontal regression for potential diagnostic analysis
-        self.residuals = model_horiz.resid
+    
+    def regression_on_principal_components(self):
+        X = sm.add_constant(self.df['Communication'])
+        self.model_pc1 = sm.OLS(self.pca_df['PC1'], X).fit()
+        self.model_pc2 = sm.OLS(self.pca_df['PC2'], X).fit()
 
-    def apply_kmeans_clustering(self):
-        """Applies KMeans clustering to the PCA components."""
-        # Assuming two principal components for KMeans input (adjust based on actual PCA application)
-        kmeans = KMeans(n_clusters=4, random_state=0).fit(self.df[['PCA1', 'PCA2']])
-        self.df['Cluster'] = kmeans.labels_
-        
-    def integrate_analysis_methods(self):
-        # Apply Multivariate Regression
-        self.model = self.multivariate_OLS()  # Assumes this method is updated for multivariate regression
-        
-        # Compute Movement Magnitude for each agent
-        self.df['Movement_Magnitude'] = np.sqrt(self.df['Horizontal']**2 + self.df['Vertical']**2)
-        
-        self.df['Predicted_Movement_Magnitude'] = self.model.predict(self.df[['Communication']])  
+        self.save_regression_results(self.model_pc1, 'regression_results_PC1.txt')
+        self.save_regression_results(self.model_pc2, 'regression_results_PC2.txt')
 
+
+
+    def save_regression_results(self, model, filename):
+        filepath = os.path.join(self.output_dir, filename)
+        with open(filepath, 'w') as f:
+            # Save the regression model summary
+            f.write(model.summary().as_text() + "\n\n")
+            
+            # Extra Analysis
+            
+            if model == self.model_pc1:
+
+                # Categorizing rewards
+                self.df['Interaction'] = self.df['Reward'].apply(lambda x: 'Food' if x > (69/len(self.unique_agents)) else ('Poison' if x < (-9.9/len(self.unique_agents)) else 'Neutral'))
+
+                # Aggregating results by AgentID and Interaction
+                interaction_counts = self.df.groupby(['AgentID', 'Interaction']).size().unstack(fill_value=0)
+                f.write("Interaction Counts:\n" + interaction_counts.to_string() + "\n\n")
+
+                # Select only numeric columns from the DataFrame for rolling operation
+                numeric_df = self.df.select_dtypes(include=[np.number])
+
+                # Apply the rolling window and sum operations on this numeric-only DataFrame
+                cooperative_moves = numeric_df[numeric_df['Reward'] > 0].groupby('AgentID').rolling(window=2).sum()
+
+                # Filter to get consecutive positive rewards
+                cooperative_moves = cooperative_moves[cooperative_moves['Reward'] > (69/len(self.unique_agents))]
+                f.write("Cooperative Moves:\n" + cooperative_moves.to_string() + "\n")
+
+                
+        
+
+    def save_fig(self, fig, plot_name):
+        """Saves matplotlib figures in the designated output directory."""
+        fig.savefig(os.path.join(self.output_dir, plot_name))
+        plt.close(fig)
+        
+    
+     
+        
+    
+    
     def apply_dbscan(self, eps=0.5, min_samples=5):
         self.dbscan = DBSCAN(eps=eps, min_samples=min_samples).fit(self.scaled_features)
         self.df['DBSCAN_Cluster'] = self.dbscan.labels_
@@ -158,13 +197,7 @@ class Analysis:
         
         return gee_results
    
-    def multivariate_OLS(self):
-        X = self.df[['Communication']]  # Independent variables
-        y = self.df[['Horizontal', 'Vertical']]  # Dependent variables
-        X = sm.add_constant(X)  # Adds a constant term to the predictor
-        multivariate_model = sm.OLS(y, X).fit()
-        print(multivariate_model.summary())
-        return multivariate_model
+    
     
     def generalized_estimating_equations(self):
         # GEE model for correlated movements within agents over time
@@ -219,19 +252,7 @@ class Analysis:
                 f.write(f'Mutual information between Agent {result[0]} and Agent {result[1]}: {result[2]}\n')
 
                 
-    def save_analysis_results(self, filename='analysis_results.txt'):
-        filepath = os.path.join(self.output_dir, filename)
-        with open(filepath, 'w') as f:
-            f.write(str(self.model.summary()) + '\n')
-
-            jb_test = sm.stats.stattools.jarque_bera(self.residuals)
-            f.write(f"Jarque-Bera test statistic: {jb_test[0]}, p-value: {jb_test[1]}\n")
-
-            bp_test = sm.stats.diagnostic.het_breuschpagan(self.residuals, self.model.model.exog)
-            f.write(f"Breusch-Pagan test statistic: {bp_test[0]}, p-value: {bp_test[1]}\n")
-
-            signal_entropy = entropy(self.df['Communication'])
-            f.write(f'Entropy of Communication Signals: {signal_entropy}\n')
+    
 
     def calculate_correlation_with_performance(self):
         communication_reward_correlation = self.df['Communication'].corr(self.df['Reward'])
@@ -280,32 +301,35 @@ class Analysis:
 
 
     def plot_pca_results(self, plot_name='pca_plot.png'):
-        plt.figure(figsize=(10, 6))
-        scatter = plt.scatter(self.df['PCA1'], self.df['PCA2'], c=self.df['AgentID'], cmap='viridis', alpha=0.5)
-        plt.colorbar(scatter, label='Agent ID')
-        plt.title('PCA: 2 Principal Components of Action Space')
-        plt.xlabel('Principal Component 1')
-        plt.ylabel('Principal Component 2')
-        self.save_fig(plt, plot_name)  # Ensure save_fig method uses plt and not scatter for saving the figure.
+        fig, ax = plt.subplots(figsize=(10, 6))  # Use subplots to get the figure and axes objects.
+        scatter = ax.scatter(self.df['PCA1'], self.df['PCA2'], c=self.df['AgentID'], cmap='viridis', alpha=0.5)
+        fig.colorbar(scatter, label='Agent ID')
+        ax.set_title('PCA: 2 Principal Components of Action Space')
+        ax.set_xlabel('Principal Component 1')
+        ax.set_ylabel('Principal Component 2')
+        self.save_fig(fig, plot_name)  # Pass the figure object to save_fig.
+
 
 
     def plot_clustering_results(self, plot_name='clustering_plot.png'):
-        plt.figure(figsize=(10, 6))
-        scatter = plt.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['Cluster'], cmap='viridis', alpha=0.5)
-        plt.colorbar(scatter, label='Cluster')
-        plt.title('Clustering: Agent Behavior Modeling')
-        plt.xlabel('Horizontal Movement')
-        plt.ylabel('Vertical Movement')
-        self.save_fig(scatter, plot_name)
+        fig, ax = plt.subplots(figsize=(10, 6))  # Create a figure and axes.
+        scatter = ax.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['Cluster'], cmap='viridis', alpha=0.5)
+        plt.colorbar(scatter, ax=ax, label='Cluster')
+        ax.set_title('Clustering: Agent Behavior Modeling')
+        ax.set_xlabel('Horizontal Movement')
+        ax.set_ylabel('Vertical Movement')
+        self.save_fig(fig, plot_name)  # Pass the figure object to save_fig.
+
 
     def plot_dbscan_results(self, plot_name='dbscan_clustering_plot.png'):
-        plt.figure(figsize=(10, 6))
-        scatter = plt.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['DBSCAN_Cluster'], cmap='viridis', alpha=0.5)
-        plt.colorbar(scatter, label='DBSCAN Cluster')
-        plt.title('DBSCAN Clustering: Agent Behavior Modeling')
-        plt.xlabel('Horizontal Movement')
-        plt.ylabel('Vertical Movement')
-        self.save_fig(scatter, plot_name)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        scatter = ax.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['DBSCAN_Cluster'], cmap='viridis', alpha=0.5)
+        fig.colorbar(scatter, ax=ax, label='DBSCAN Cluster')
+        ax.set_title('DBSCAN Clustering: Agent Behavior Modeling')
+        ax.set_xlabel('Horizontal Movement')
+        ax.set_ylabel('Vertical Movement')
+        self.save_fig(fig, plot_name)  # Correctly pass the figure object
+
 
     def plot_hierarchical_clusters(self, n_clusters, plot_name='hierarchical_clustering_plot.png'):
         from scipy.cluster.hierarchy import fcluster
@@ -316,7 +340,8 @@ class Analysis:
         plt.title(f'Hierarchical Clustering with {n_clusters} Clusters')
         plt.xlabel('Horizontal Movement')
         plt.ylabel('Vertical Movement')
-        self.save_fig(scatter, plot_name)
+        plt.savefig(os.path.join(self.output_dir, plot_name))  
+        plt.close()
 
        
     def perform_time_frequency_analysis(self, plot_name):
@@ -330,22 +355,7 @@ class Analysis:
         plt.savefig(os.path.join(self.output_dir, plot_name))  
         plt.close()
         
-    def plot_communication_over_time(self, plot_name='communication_over_time.png'):
-        plt.figure(figsize=(12, 8))
-        # Sample a subset of agents if there are too many
-        sampled_agents = np.random.choice(self.unique_agents, min(len(self.unique_agents), 10), replace=False)
-        for agent_id in sampled_agents:
-            agent_data = self.df[self.df['AgentID'] == agent_id]
-            # Consider averaging communication signals over a window to smooth out the data
-            rolling_mean = agent_data['Communication'].rolling(window=10, min_periods=1).mean()
-            plt.plot(agent_data.index, rolling_mean, label=f'Agent {agent_id}')
-        plt.xlabel('Time Step')
-        plt.ylabel('Communication Signal (Rolling Mean)')
-        plt.title('Communication Signal Over Time by Agent (Sampled & Smoothed)')
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(os.path.join(self.output_dir, plot_name))  
-        plt.close()
+    
 
         
         
