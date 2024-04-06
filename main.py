@@ -379,14 +379,15 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         analysis.apply_dbscan(eps=0.5, min_samples=5)
         analysis.apply_hierarchical_clustering()
         analysis.plot_movement_communication_scatter(plot_name='movement_communication_scatter_plot.png')
-        analysis.plot_communication_over_time(plot_name='communication_over_time.png')
+        
         analysis.calculate_correlation_with_performance()
         analysis.plot_pca_results(plot_name='pca_plot.png')
         analysis.plot_clustering_results(plot_name='clustering_plot.png')
         analysis.plot_dbscan_results(plot_name='dbscan_clustering_plot.png')
-        analysis.save_analysis_results(filename='analysis_results.txt')
+        analysis.behavior_clustering(plot_name='behavior_clustering_plot.png')
+        
         analysis.perform_time_frequency_analysis(plot_name='psd_plot.png')
-
+        
 
     
 
@@ -551,8 +552,8 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'eval_path'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
-    model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
+    process_to_run = 'train'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
+    model_choice = 'SAC'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
         process_to_run = 'eval'
