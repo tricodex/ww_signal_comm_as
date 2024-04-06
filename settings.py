@@ -26,12 +26,12 @@
 
 #4 # Pursuers setup
 env_kwargs = {
-    "n_pursuers": 12,
+    "n_pursuers": 8,
     "n_evaders": 6,
     "n_poisons": 8,
     "n_coop": 2,
-    "n_sensors": 16,
-    "sensor_range": 0.2,
+    "n_sensors": 8,
+    "sensor_range": 0.04,
     "radius": 0.015,
     "obstacle_radius": 0.055,
     "n_obstacles": 1,
