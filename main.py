@@ -361,32 +361,91 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         base_dir = 'analysis_data'
         os.makedirs(base_dir, exist_ok=True)
 
-        # Now, create a subdirectory for the current date and time within 'analysis_data'
         current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         analysis_output_dir = os.path.join(base_dir, current_datetime)
-        os.makedirs(analysis_output_dir, exist_ok=True) 
+        os.makedirs(analysis_output_dir, exist_ok=True)
 
-        # Assuming 'actions' is your dataset
-        actions_array = np.array(actions)  # Convert your dataset to a numpy array
+        # Data preparation
+        actions_array = np.array(actions)
 
-        # Instantiate the Analysis class with your actions array and the output directory
-        analysis = Analysis(actions_array, analysis_output_dir)  
+        # Instantiate Analysis class with the output directory where results (including plots) will be saved
+        analysis = Analysis(actions_array, analysis_output_dir)
 
-        # Perform mutual information calculation between all pairs of agents
-        analysis.calculate_mutual_info_results()
-        analysis.print_mutual_info_results()
-        analysis.save_mutual_info_results(filename='mutual_information_results.txt')
-        analysis.apply_dbscan(eps=0.5, min_samples=5)
+        # Analysis Execution
+        ## PCA and Regression
+        analysis.apply_dynamic_pca()
+        analysis.apply_pca_to_dependent_vars()
+        analysis.regression_on_principal_components()
+
+        ## Clustering
+        analysis.apply_dbscan(eps=0.2, min_samples=2)
         analysis.apply_hierarchical_clustering()
+        analysis.behavior_clustering(plot_name='behavior_clustering.png')
+
+        ## Mutual Information and Entropy
+        analysis.calculate_mutual_info_results()
+        analysis.summarize_and_calculate_entropy(2)  
+             
+        
+        ## GEE
+        gee_results = analysis.apply_gee()
+
+        ## Correlation
+        communication_reward_correlation = analysis.calculate_correlation_with_performance()
+
+        # Plotting Results
+        analysis.plot_mutual_info_heatmap(plot_name='mutual_info_heatmap.png')
         analysis.plot_movement_communication_scatter(plot_name='movement_communication_scatter_plot.png')
-        
-        analysis.calculate_correlation_with_performance()
         analysis.plot_pca_results(plot_name='pca_plot.png')
-        analysis.plot_clustering_results(plot_name='clustering_plot.png')
         analysis.plot_dbscan_results(plot_name='dbscan_clustering_plot.png')
-        analysis.behavior_clustering(plot_name='behavior_clustering_plot.png')
-        
         analysis.perform_time_frequency_analysis(plot_name='psd_plot.png')
+        analysis.plot_signal_histogram(plot_name='signal_histogram.png')
+        analysis.create_k_distance_plot(plot_name='k_distance_plot.png')
+        analysis.save_results()
+        
+        # Save Analysis Results Textually
+        results_file_path = os.path.join(analysis_output_dir, 'analysis_results.txt')
+        with open(results_file_path, 'w') as file:
+            # PCA and Regression
+            file.write("PCA and Regression Results:\n")
+            file.write(analysis.model_pc1.summary().as_text() + "\n\n")
+            file.write(analysis.model_pc2.summary().as_text() + "\n\n")
+            
+            # Clustering
+            file.write("Clustering Results:\n")
+            file.write("DBSCAN and Hierarchical Clustering applied. See respective plot images.\n\n")
+            
+            # Mutual Information and Entropy
+            file.write("Signal Summary:\n")
+            com_sum = analysis.communication_summary
+            file.write(f"Communication Signal Summary: {com_sum}\n")
+            file.write("\n")
+            file.write("Mutual Information and Entropy Results:\n")
+            for result in analysis.mutual_info_results:
+                file.write(f"Between Agent {result[0]} and Agent {result[1]}: MI = {result[2]}\n")
+            file.write(f"\nEntropy all signals: {analysis.entropy_value}")
+            individual_entropies = analysis.calculate_individual_agent_entropy()
+            # Write entropies for individual agents
+            file.write("\nEntropy of individual signals:\n")
+            for agent_id, entropy_value in individual_entropies.items():
+                file.write(f"Agent {agent_id} Entropy: {entropy_value}\n")
+            
+            file.write("\n")
+            
+            # GEE
+            file.write("\nGEE Results:\n")
+            for var, result in gee_results.items():
+                file.write(f"{var}:\n{result.summary().as_text()}\n\n")
+            
+            # Correlation
+            file.write("Correlation Analysis:\n")
+            file.write(f"Correlation between Communication Signal and Performance: {communication_reward_correlation}\n")
+
+        # Print Mutual Information Results to Console
+        print("Mutual Information Results:")
+        for result in analysis.mutual_info_results:
+            print(f"Between Agent {result[0]} and Agent {result[1]}: MI = {result[2]}")
+        
         
 
     
@@ -552,8 +611,8 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'train'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
-    model_choice = 'SAC'  # Options: 'Heuristic', 'PPO', 'SAC'
+    process_to_run = 'eval_path'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
+    model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
         process_to_run = 'eval'
