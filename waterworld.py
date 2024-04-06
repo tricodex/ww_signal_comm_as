@@ -123,10 +123,10 @@ class raw_env(AECEnv, EzPickle):
 """
 # Waterworld
 
-| Action Shape         | (2,)                                                   |
-| Action Values        | [-0.01, 0.01]                                          |
-| Observation Shape    | (242,)                                                 |
-| Observation Values   | [-√2, 2*√2]                                            |
+| Action Shape         | (3,)                                                   
+| Action Values        | [horizontal thrust, vertical thrust, communication signal]                                          
+| Observation Shape    | (242,)                                                 
+| Observation Values   | [-√2, 2*√2]                                            
 
 
 Waterworld is a simulation of archea navigating and trying to survive in their environment. These archea, called pursuers attempt to consume food while avoiding poison. The agents in waterworld are the pursuers, while food and poison belong to the environment. Poison has a radius which is 0.75
@@ -191,13 +191,6 @@ averaged over the number of agents (global rewards) are scaled by `(1 - local_ra
 
 ### Arguments
 
-``` python
-waterworld_v4.env(n_pursuers=5, n_evaders=5, n_poisons=10, n_coop=2, n_sensors=20,
-sensor_range=0.2,radius=0.015, obstacle_radius=0.2, n_obstacles=1,
-obstacle_coord=[(0.5, 0.5)], pursuer_max_accel=0.01, evader_speed=0.01,
-poison_speed=0.01, poison_reward=-1.0, food_reward=10.0, encounter_reward=0.01,
-thrust_penalty=-0.5, local_ratio=1.0, speed_features=True, max_cycles=500)
-```
 
 `n_pursuers`: number of pursuing archea (agents)
 
