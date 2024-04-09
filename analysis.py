@@ -53,19 +53,30 @@ class Analysis:
         self.apply_pca_to_dependent_vars()
         self.regression_on_principal_components()
         
-    
-    def apply_dynamic_pca(self):
+        
+    def apply_dynamic_pca(self, variance_threshold=0.9):
         pca = PCA().fit(self.scaled_features)
         cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
-        n_components = min(np.argmax(cumulative_variance >= 0.9) + 1, 2)  # Ensuring at most 2 components
+        n_components = np.sum(cumulative_variance < variance_threshold) + 1  # Adjust based on variance threshold
+        print(f"Selected {n_components} components explaining at least {variance_threshold*100}% of variance.")
         
         pca_optimal = PCA(n_components=n_components)
         pca_components = pca_optimal.fit_transform(self.scaled_features)
-        
-        # Directly assign PCA components to 'PCA1' and 'PCA2' as needed
-        self.df['PCA1'] = pca_components[:, 0]
-        if n_components > 1:
-            self.df['PCA2'] = pca_components[:, 1]
+        # Assign PCA components dynamically based on the number selected
+        for i in range(n_components):
+            self.df[f'PCA{i+1}'] = pca_components[:, i]
+
+    def plot_cumulative_variance(self, pca):
+        plt.figure(figsize=(8, 5))
+        plt.plot(np.cumsum(pca.explained_variance_ratio_))
+        plt.xlabel('Number of Components')
+        plt.ylabel('Cumulative Explained Variance')
+        plt.title('Cumulative Explained Variance by PCA Components')
+        plt.grid(True)
+        plt.savefig(os.path.join(self.output_dir, 'cumulative_variance.png'))
+        plt.close()
+
+
 
 
     def apply_pca_to_dependent_vars(self):
@@ -277,14 +288,7 @@ class Analysis:
         plt.close()
 
 
-    def plot_pca_results(self, plot_name='pca_plot.png'):
-        fig, ax = plt.subplots(figsize=(10, 6))  # Use subplots to get the figure and axes objects.
-        scatter = ax.scatter(self.df['PCA1'], self.df['PCA2'], c=self.df['AgentID'], cmap='viridis', alpha=0.5)
-        fig.colorbar(scatter, label='Agent ID')
-        ax.set_title('PCA: 2 Principal Components of Action Space')
-        ax.set_xlabel('Principal Component 1')
-        ax.set_ylabel('Principal Component 2')
-        self.save_fig(fig, plot_name)  # Pass the figure object to save_fig.
+    
 
 
 
