@@ -21,6 +21,7 @@ from heurisitic_signal_policy import communication_heuristic_policy
 import numpy as np
 from analysis import Analysis
 
+
 MODEL_DIR = 'models'
 TRAIN_DIR = 'train'
 OPTIMIZE_DIR = 'optimize'
@@ -194,6 +195,303 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
     
 
     return overall_avg_reward
+
+
+def eval_with_model_path_run(env_fn, model_path, model_name, num_pursuers, sensor_range=None, poison_speed=None, sensor_count=None, num_games=100, render_mode=None):
+    # Dynamic environment configuration based on the model specifics
+    env_kwargs = {
+        "n_pursuers": num_pursuers,
+        "n_evaders": 6,
+        "n_poisons": 8,
+        "n_coop": 2,
+        "n_sensors": sensor_count if sensor_count is not None else 16,
+        "sensor_range": sensor_range if sensor_range is not None else 0.2,
+        "radius": 0.015,
+        "obstacle_radius": 0.055,
+        "n_obstacles": 1,
+        "obstacle_coord": [(0.5, 0.5)],
+        "pursuer_max_accel": 0.01,
+        "evader_speed": 0.01,
+        "poison_speed": poison_speed if poison_speed is not None else 0.075,
+        "poison_reward": -10,
+        "food_reward": 70.0,
+        "encounter_reward": 0.015,
+        "thrust_penalty": -0.01,
+        "local_ratio": 0.0,
+        "speed_features": True,
+        "max_cycles": 1000
+    }
+    actions = []
+    env = env_fn.env(render_mode=render_mode, **env_kwargs)
+    print(f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})")
+
+    if model_path is None:
+        if model_name == "Heuristic":
+            print(f"Proceeding with heuristic policy for {num_games} games.")
+        else:
+            print("Model path is None but model name is not 'Heuristic'.")
+            return None
+    else:
+        if not os.path.exists(model_path):
+            print("Model not found.")
+            return None
+        if model_name == "PPO":
+            model = PPO.load(model_path)
+        elif model_name == "SAC":
+            model = SAC.load(model_path)
+        else:
+            print("Invalid model name.")
+            return None
+
+    total_rewards = {agent: 0 for agent in env.possible_agents}
+    episode_avg_rewards = []
+
+    for i in range(num_games):
+        episode_rewards = {agent: 0 for agent in env.possible_agents}
+        env.reset(seed=i)
+        for agent in env.agent_iter():
+            obs, reward, termination, truncation, info = env.last()
+            episode_rewards[agent] += reward
+
+            if termination or truncation:
+                action = None
+            else:
+                if model_name == "Heuristic":
+                    n_sensors = env_kwargs.get('n_sensors')
+                    action = communication_heuristic_policy(obs, n_sensors, env_kwargs['sensor_range'], len(env.possible_agents))
+                else:
+                    action, _states = model.predict(obs, deterministic=True)
+                    
+                # Store action, reward, and agent ID as a single array for later analysis
+                actionid = np.append(action, [reward, int(agent[-1])])  # Ensure this matches the expected input format for Analysis
+                actions.append(actionid)
+                
+            env.step(action)
+
+        for agent in episode_rewards:
+            total_rewards[agent] += episode_rewards[agent]
+        episode_avg_rewards.append(sum(episode_rewards.values()) / len(episode_rewards))
+
+    env.close()
+
+    overall_avg_reward = sum(total_rewards.values()) / (len(total_rewards) * num_games)
+    print("Total Rewards: ", total_rewards, "over", num_games, "games")
+    print(f"Overall Avg reward: {overall_avg_reward}")
+
+    # Return both the actions and the overall average reward
+    return {'actions': actions, 'overall_avg_reward': overall_avg_reward}
+
+
+
+
+def run_evaluations_and_analysis(env_fn, model_configs, num_games_per_eval):
+    overall_results = {}
+    current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    base_dir = f'analysis_data_aggregate/{current_datetime}'
+    os.makedirs(base_dir, exist_ok=True)
+    
+    for config in model_configs:
+        model_path = config['model_path']
+        model_name = config['model_name']
+        num_pursuers = config['n_pursuers']
+        sensor_range = config.get('sensor_range')
+        poison_speed = config.get('poison_speed')
+        sensor_count = config.get('sensor_count')
+        
+        print(f"Evaluating {model_name} with model path: {model_path} and {num_pursuers} pursuers")
+        evaluation_results = eval_with_model_path_run(
+            env_fn, model_path, model_name, num_pursuers, sensor_range, poison_speed, sensor_count, num_games_per_eval, None
+        )
+        
+        if evaluation_results is None:
+            print(f"Skipping evaluation for {model_name} due to an error.")
+            continue
+        
+        # Store the evaluation results in the overall results dictionary
+        model_key = f"{model_name}_{num_pursuers}"
+        overall_results[model_key] = {'evaluation': evaluation_results}
+        
+        # Analysis is always required
+        analysis_output_dir = os.path.join(base_dir, f"{model_key}_{current_datetime}")
+        os.makedirs(analysis_output_dir, exist_ok=True)
+        actions_array = np.array(evaluation_results['actions'])
+        analysis = Analysis(actions_array, analysis_output_dir)
+
+        # Execute analysis methods
+        analysis.apply_dynamic_pca()
+        analysis.apply_pca_to_dependent_vars()
+        analysis.regression_on_principal_components()
+        analysis.apply_dbscan(eps=0.2, min_samples=2)
+        analysis.apply_hierarchical_clustering()
+        analysis.behavior_clustering()
+        mutual_results = analysis.calculate_mutual_info_results()
+        entropy_value = analysis.summarize_and_calculate_entropy(2)  
+        gee_results = analysis.apply_gee()
+        communication_reward_correlation = analysis.calculate_correlation_with_performance()
+        analysis.save_results()
+
+        # Store analysis results in the overall results dictionary
+        overall_results[model_key]['analysis'] = {
+            'dynamic_pca': analysis.pca_df.to_dict('records'),  # Convert DataFrame to list of dictionaries
+            'dbscan_clusters': analysis.dbscan.labels_.tolist(),  # Convert numpy array to list
+            'gee_results': {var: result.summary().as_text() for var, result in gee_results.items()},  # Store summary text of GEE results
+            'correlation_with_performance': communication_reward_correlation,
+            'mutual_information': mutual_results,
+            'entropy_values': entropy_value,
+        }
+
+    return overall_results
+
+
+
+
+
+def aggregate_analysis_results(all_games_data):
+    """
+    Aggregates the results from all games for each model configuration.
+    
+    :param all_games_data: List containing results from all games for a model.
+    :return: Dictionary with aggregated analysis results.
+    """
+    # Initialize structure for aggregated results
+    aggregated_results = {
+        'pca_and_regression': [],
+        'mutual_information': [],
+        'entropy_values': [],
+        'gee_results': [],
+        'communication_reward_correlation': [],
+        'behavioral_impacts': []
+    }
+    
+    # Process each game's data
+    for game_data in all_games_data:
+        analysis_data = game_data.get('analysis', {})
+
+        # Collecting PCA and regression results
+        if 'dynamic_pca' in analysis_data:
+            aggregated_results['pca_and_regression'].extend(analysis_data['dynamic_pca'])
+
+        # Collecting mutual information results
+        if 'mutual_information' in analysis_data:
+            aggregated_results['mutual_information'].extend(analysis_data['mutual_information'])
+
+        # Collecting entropy values
+        if 'entropy_values' in analysis_data:
+            aggregated_results['entropy_values'].append(analysis_data['entropy_values'])
+
+        # Collecting GEE results
+        if 'gee_results' in analysis_data:
+            aggregated_results['gee_results'].append(analysis_data['gee_results'])
+
+        # Collecting correlation results
+        if 'correlation_with_performance' in analysis_data:
+            aggregated_results['communication_reward_correlation'].append(analysis_data['correlation_with_performance'])
+
+        # Collecting behavioral impacts
+        if 'behavioral_impacts' in analysis_data:
+            aggregated_results['behavioral_impacts'].append(analysis_data['behavioral_impacts'])
+
+    # Additional processing if necessary, for example, averaging or summarizing
+    return aggregated_results
+
+
+
+
+def plot_mutual_information_heatmap(mi_data, timestamp):
+    import seaborn as sns
+    agents = sorted(set(pair for pairs in mi_data.keys() for pair in pairs))
+    mi_matrix = np.zeros((len(agents), len(agents)))
+    for (agent1, agent2), value in mi_data.items():
+        i, j = agents.index(agent1), agents.index(agent2)
+        mi_matrix[i, j] = mi_matrix[j, i] = value
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(mi_matrix, annot=True, fmt=".2f", cmap="coolwarm", xticklabels=agents, yticklabels=agents)
+    plt.title('Mutual Information Between Agents')
+    plt.savefig(f'report/MI_heatmap_{timestamp}.png')
+    plt.close()
+
+def plot_entropy_histogram(entropy_values, timestamp):
+    plt.figure(figsize=(8, 6))
+    plt.hist(entropy_values, bins=10, color='skyblue')
+    plt.title('Histogram of Entropy Values')
+    plt.xlabel('Entropy')
+    plt.ylabel('Frequency')
+    plt.savefig(f'report/Entropy_histogram_{timestamp}.png')
+    plt.close()
+
+def report_analysis_results(aggregated_results):
+    os.makedirs('report', exist_ok=True)
+    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"report_{current_time}.txt"
+    filepath = os.path.join('report', filename)
+
+    with open(filepath, 'w') as file:
+        file.write("Aggregated Analysis Results:\n")
+        file.write("PCA and Regression:\n")
+        
+        # Here, handle pca_and_regression as a list of dictionaries
+        for pca_result in aggregated_results['pca_and_regression']:
+            for key, value in pca_result.items():
+                file.write(f"Principal Component {key}: {value}\n")
+        
+        # Handle other sections similarly, ensuring they are iterated correctly based on their data type
+        file.write("\nMutual Information:\n")
+        for mi_result in aggregated_results['mutual_information']:
+            for pair, value in mi_result.items():
+                file.write(f"Between Agents {pair[0]} and {pair[1]}: {value}\n")
+        
+        # Example of handling a list directly
+        file.write("\nEntropy:\n")
+        for entropy_value in aggregated_results['entropy_values']:
+            file.write(f"Entropy: {entropy_value}\n")
+        
+        file.write("\nGEE Results:\n")
+        for gee_result in aggregated_results['gee_results']:
+            file.write(f"GEE Result: {gee_result}\n")
+        
+        file.write("\nCommunication Signal and Reward Correlation:\n")
+        for correlation in aggregated_results['communication_reward_correlation']:
+            file.write(f"Correlation: {correlation}\n")
+        
+        file.write("\nBehavioral Impacts:\n")
+        for impact in aggregated_results['behavioral_impacts']:
+            file.write(f"Impact: {impact}\n")
+    
+    print(f"Aggregated analysis results saved to {filepath}")
+
+
+
+def run_analysis():
+    model_configs = [
+        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240313-111355.zip", "n_pursuers": 2},
+        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-011623.zip", "n_pursuers": 4},
+        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6},
+        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.04, "poison_speed": 0.15},
+        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240315-171531.zip", "n_pursuers": 2},
+        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240318-022243.zip", "n_pursuers": 4},
+        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240314-195426.zip", "n_pursuers": 6},
+        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240406-122632.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+        {"model_name": "Heuristic", "model_path": None, "n_pursuers": 4},
+        {"model_name": "Heuristic", "model_path": None, "n_pursuers": 6},
+        {"model_name": "Heuristic", "model_path": None, "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+    ]
+    
+    # Initialize and run the evaluations
+    evaluation_results = run_evaluations_and_analysis(env_fn, model_configs, 3)
+    
+    # Prepare to aggregate results from all games
+    all_games_data = [results for results in evaluation_results.values() if 'evaluation' in results]
+
+    # Check if all_games_data is structured correctly before proceeding
+    if not all(isinstance(game, dict) for game in all_games_data):
+        print("Error: all_games_data is not structured correctly.")
+        return
+
+    aggregated_results = aggregate_analysis_results(all_games_data)
+    report_analysis_results(aggregated_results)
+    
+
 
 def train_eval(env_fn, model, model_subdir, steps=100_000, seed=None, **hyperparam_kwargs):
     train_waterworld(env_fn, model, TRAIN_DIR, steps=steps, seed=0, **hyperparam_kwargs)
@@ -611,7 +909,7 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'eval_path'  # Options: 'train', 'optimize', 'eval', 'eval_path' or 'fine_tune'
+    process_to_run = 'analysis'  # Options: 'train', 'optimize', 'eval', 'eval_path', 'analysis' or 'fine_tune'
     model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
@@ -629,4 +927,6 @@ if __name__ == "__main__":
         run_eval_path(model=model_choice)
     elif process_to_run == 'fine_tune':
         run_fine_tune(model=model_choice, model_path=r"models\train\waterworld_v4_20240405-125529.zip")
+    elif process_to_run == 'analysis':
+        run_analysis()
         
