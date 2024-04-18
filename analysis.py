@@ -55,18 +55,32 @@ class Analysis:
         
         
     def apply_dynamic_pca(self, variance_threshold=0.9):
+        """
+        Applies PCA dynamically based on a variance threshold and ensures at least one component is selected.
+        """
         pca = PCA().fit(self.scaled_features)
         cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
-        n_components = np.sum(cumulative_variance < variance_threshold) + 1  # Adjust based on variance threshold
-        print(f"Selected {n_components} components explaining at least {variance_threshold*100}% of variance.")
+        valid_components = np.where(cumulative_variance >= variance_threshold)[0]
+
+        if valid_components.size == 0:
+            n_components = len(cumulative_variance)  # Use all components if none meet the threshold
+            print("Warning: No components meet the variance threshold. Using all components.")
+        else:
+            n_components = valid_components[0] + 1
+
+        print(f"Selected {n_components} components, explaining at least {variance_threshold*100:.2f}% of variance.")
         
         pca_optimal = PCA(n_components=n_components)
         pca_components = pca_optimal.fit_transform(self.scaled_features)
-        # Assign PCA components dynamically based on the number selected
-        for i in range(n_components):
-            self.df[f'PCA{i+1}'] = pca_components[:, i]
+        self.df[[f'PCA{i+1}' for i in range(n_components)]] = pca_components
+        return pca_optimal
 
-    def plot_cumulative_variance(self, pca):
+
+    def plot_cumulative_variance(self):
+        """
+        Plots the cumulative variance explained by the principal components to aid in deciding how many components to retain.
+        """
+        pca = PCA().fit(self.scaled_features)
         plt.figure(figsize=(8, 5))
         plt.plot(np.cumsum(pca.explained_variance_ratio_))
         plt.xlabel('Number of Components')
@@ -75,6 +89,25 @@ class Analysis:
         plt.grid(True)
         plt.savefig(os.path.join(self.output_dir, 'cumulative_variance.png'))
         plt.close()
+        
+    def analyze_behavioral_impact(self):
+        """
+        Analyzes the impact of communication on movement by examining correlations.
+        """
+        # Calculate changes in movement
+        self.df['HorizontalChange'] = self.df['Horizontal'].diff().fillna(0)
+        self.df['VerticalChange'] = self.df['Vertical'].diff().fillna(0)
+        
+        # Calculate correlations
+        correlation_horizontal = self.df['Communication'].corr(self.df['HorizontalChange'])
+        correlation_vertical = self.df['Communication'].corr(self.df['VerticalChange'])
+        
+        print(f"Correlation between Communication and Horizontal Movement Change: {correlation_horizontal:.3f}")
+        print(f"Correlation between Communication and Vertical Movement Change: {correlation_vertical:.3f}")
+
+        return correlation_horizontal, correlation_vertical
+
+
 
 
 
@@ -209,6 +242,8 @@ class Analysis:
         print(f"\nEntropy of the signals: {entropy_value}")
         
         self.entropy_value = entropy_value
+        
+        return entropy_value
     
     def apply_hierarchical_clustering(self):
         # More comprehensive use of hierarchical clustering
@@ -226,16 +261,35 @@ class Analysis:
         signal1_discretized = est.fit_transform(signal1.reshape(-1, 1)).flatten()
         signal2_discretized = est.fit_transform(signal2.reshape(-1, 1)).flatten()
         return mutual_info_score(signal1_discretized, signal2_discretized)
-
+    
     def calculate_mutual_info_results(self):
+        """
+        Calculates mutual information for all unique pairs of agents to measure the dependency of their communication signals.
+        """
+        results = []
         for i in range(len(self.unique_agents)):
             for j in range(i + 1, len(self.unique_agents)):
-                agent_i_signals = self.df[self.df['AgentID'] == self.unique_agents[i]]['Communication'].values
-                agent_j_signals = self.df[self.df['AgentID'] == self.unique_agents[j]]['Communication'].values
-                # Calculate mutual information only if both agents have emitted signals
+                agent_i_signals = self.df[self.df['AgentID'] == self.unique_agents[i]]['Communication']
+                agent_j_signals = self.df[self.df['AgentID'] == self.unique_agents[j]]['Communication']
+                
                 if len(agent_i_signals) > 0 and len(agent_j_signals) > 0:
-                    mi = self.calculate_mutual_information(agent_i_signals, agent_j_signals)
-                    self.mutual_info_results.append((self.unique_agents[i], self.unique_agents[j], mi))
+                    mi = self.calculate_mutual_information(agent_i_signals.values, agent_j_signals.values)
+                    results.append({'agents': (self.unique_agents[i], self.unique_agents[j]), 'MI': mi})
+                    print(f'Mutual information between Agent {self.unique_agents[i]} and Agent {self.unique_agents[j]}: {mi:.3f}')
+
+        self.mutual_info_results = results
+        return results
+
+
+    # def calculate_mutual_info_results(self):
+    #     for i in range(len(self.unique_agents)):
+    #         for j in range(i + 1, len(self.unique_agents)):
+    #             agent_i_signals = self.df[self.df['AgentID'] == self.unique_agents[i]]['Communication'].values
+    #             agent_j_signals = self.df[self.df['AgentID'] == self.unique_agents[j]]['Communication'].values
+    #             # Calculate mutual information only if both agents have emitted signals
+    #             if len(agent_i_signals) > 0 and len(agent_j_signals) > 0:
+    #                 mi = self.calculate_mutual_information(agent_i_signals, agent_j_signals)
+    #                 self.mutual_info_results.append((self.unique_agents[i], self.unique_agents[j], mi))
 
     def print_mutual_info_results(self):
         for result in self.mutual_info_results:
@@ -318,16 +372,18 @@ class Analysis:
         plt.close()
 
        
-    def perform_time_frequency_analysis(self, plot_name):
-        frequencies, power_spectral_density = welch(self.df['Communication'], fs=1.0, window='hann', nperseg=1024, scaling='spectrum')
-        plt.figure(figsize=(10, 6))
-        plt.semilogy(frequencies, power_spectral_density)
-        plt.title('Power Spectral Density of Communication Signals')
-        plt.xlabel('Frequency [Hz]')
-        plt.ylabel('Power/Frequency [V^2/Hz]')
-        
-        plt.savefig(os.path.join(self.output_dir, plot_name))  
+    def perform_time_frequency_analysis(self):
+        from scipy.signal import spectrogram
+        signal = self.df['Communication'].values
+        f, t, Sxx = spectrogram(signal, fs=1)  # Assuming 1 Hz sampling rate; adjust as necessary
+        plt.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')
+        plt.ylabel('Frequency (Hz)')
+        plt.xlabel('Time (sec)')
+        plt.title('Spectrogram of Communication Signal')
+        plt.colorbar(label='Intensity (dB)')
+        plt.savefig(os.path.join(self.output_dir, 'spectrogram.png'))
         plt.close()
+
         
     def create_k_distance_plot(self, k=8, plot_name='k_distance_plot.png'):
         """
