@@ -453,16 +453,17 @@ class Analysis:
         plt.savefig(os.path.join(self.output_dir, plot_name))
         plt.close()
 
-    def perform_time_frequency_analysis(self):
+    def perform_time_frequency_analysis(self, plot_name='time_frequency_analysis.png'):
         from scipy.signal import spectrogram
         signal = self.df['Communication'].values
         f, t, Sxx = spectrogram(signal, fs=1)  # Assuming 1 Hz sampling rate; adjust as necessary
+        plt.figure(figsize=(10, 8))
         plt.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')
         plt.ylabel('Frequency (Hz)')
         plt.xlabel('Time (sec)')
         plt.title('Spectrogram of Communication Signal')
         plt.colorbar(label='Intensity (dB)')
-        plt.savefig(os.path.join(self.output_dir, 'spectrogram.png'))
+        plt.savefig(os.path.join(self.output_dir, plot_name))
         plt.close()
 
     
