@@ -323,9 +323,9 @@ model_configs = [
     {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240318-022243.zip", "n_pursuers": 4},
     {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240314-195426.zip", "n_pursuers": 6},
     {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240406-122632.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
-    # {"model_name": "Heuristic", "model_path": None, "n_pursuers": 4},
-    # {"model_name": "Heuristic", "model_path": None, "n_pursuers": 6},
-    # {"model_name": "Heuristic", "model_path": None, "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+    {"model_name": "Heuristic", "model_path": None, "n_pursuers": 4},
+    {"model_name": "Heuristic", "model_path": None, "n_pursuers": 6},
+    {"model_name": "Heuristic", "model_path": None, "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
 ]
 
 def run_and_analyze_all_configs(games=100):
@@ -428,6 +428,53 @@ def compare_across_configurations(all_results):
     
     
     return df
+
+
+
+
+def run_advanced_analysis(config):
+    print(f"\nRunning advanced analysis for {config['model_name']} with {config['n_pursuers']} agents...\n")
+
+    # Run the model evaluation for one detailed game
+    eval_results = eval_with_model_path_run(
+        env_fn=env_fn,
+        model_path=config.get("model_path"),
+        model_name=config["model_name"],
+        num_pursuers=config["n_pursuers"],
+        sensor_range=config.get("sensor_range"),
+        poison_speed=config.get("poison_speed"),
+        sensor_count=config.get("sensor_count"),
+        num_games=1,  # Reduced number of games for detailed analysis
+        render_mode=None
+    )
+
+    if eval_results:
+        actions = eval_results.get('actions', [])
+        output_dir = f"results/{current_datetime}/{config['model_name']}_pursuers_{config['n_pursuers']}"
+        
+        # Instantiate the Analysis class from analysis.py
+        analysis = Analysis(actions, output_dir=output_dir)
+
+        # Call the specific advanced analysis methods
+        analysis.plot_hierarchical_clusters(n_clusters=5)
+        analysis.perform_time_frequency_analysis()
+        analysis.plot_signal_histogram()
+        analysis.create_k_distance_plot()
+        analysis.calculate_entropy_of_communication_signals()
+
+        print(f"Completed advanced analysis for {config['model_name']} with {config['n_pursuers']} agents.")
+    else:
+        print("Failed to obtain results for advanced analysis.")
+
+
+advanced_configs = [
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8},
+]
+
+for config in advanced_configs:
+    run_advanced_analysis(config)
+
 
 
     
