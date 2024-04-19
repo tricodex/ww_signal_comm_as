@@ -45,6 +45,9 @@ class Analysis:
         self.linked = None
         self.entropy_value = None
         
+        
+        self.results = {}
+        
         self.communication_summary = self.df['Communication'].describe()
         
 
@@ -76,19 +79,7 @@ class Analysis:
         return pca_optimal
 
 
-    def plot_cumulative_variance(self):
-        """
-        Plots the cumulative variance explained by the principal components to aid in deciding how many components to retain.
-        """
-        pca = PCA().fit(self.scaled_features)
-        plt.figure(figsize=(8, 5))
-        plt.plot(np.cumsum(pca.explained_variance_ratio_))
-        plt.xlabel('Number of Components')
-        plt.ylabel('Cumulative Explained Variance')
-        plt.title('Cumulative Explained Variance by PCA Components')
-        plt.grid(True)
-        plt.savefig(os.path.join(self.output_dir, 'cumulative_variance.png'))
-        plt.close()
+    
         
     def analyze_behavioral_impact(self):
         """
@@ -106,11 +97,6 @@ class Analysis:
         print(f"Correlation between Communication and Vertical Movement Change: {correlation_vertical:.3f}")
 
         return correlation_horizontal, correlation_vertical
-
-
-
-
-
 
     def apply_pca_to_dependent_vars(self):
         dependent_vars = self.df[['Horizontal', 'Vertical']]
@@ -193,22 +179,10 @@ class Analysis:
         # GEE model for correlated movements within agents over time
         model = GEE.from_formula("Horizontal + Vertical ~ Communication", "AgentID", self.df, cov_struct=Independence())
         result = model.fit()
-        print(result.summary())
+        #print(result.summary())
         return result
     
-    def plot_signal_histogram(self, plot_name='signal_histogram.png'):
-        # Extract the signal column
-        signal = self.df['Communication'].values
-        # Plot histogram
-        plt.figure(figsize=(10, 6))
-        plt.hist(signal, bins=10, density=True, alpha=0.6, color='g')
-        # Add titles and labels
-        plt.title('Histogram of Communication Signals')
-        plt.xlabel('Signal Value')
-        plt.ylabel('Probability Density')
-        # Save the histogram figure
-        plt.savefig(os.path.join(self.output_dir, plot_name))
-        plt.close()
+    
         
     def calculate_individual_agent_entropy(self, signal_column='Communication'):
         """Calculates the entropy for each individual agent's signals."""
@@ -219,7 +193,7 @@ class Analysis:
             probabilities = hist * np.diff(bin_edges)
             entropy_value = entropy(probabilities[probabilities > 0], base=2)
             entropies[agent_id] = entropy_value
-            print(f'Entropy for Agent {agent_id}: {entropy_value}')
+            #print(f'Entropy for Agent {agent_id}: {entropy_value}')
         return entropies
     
     
@@ -229,8 +203,8 @@ class Analysis:
 
         # Display statistical summary of the signals
         signals_series = pd.Series(signals)
-        print("Statistical summary of the signals:")
-        print(signals_series.describe())
+        #print("Statistical summary of the signals:")
+        #print(signals_series.describe())
 
         # Calculate entropy of the signals
         hist, bin_edges = np.histogram(signals, bins=n_bins, density=True)
@@ -263,9 +237,6 @@ class Analysis:
         return mutual_info_score(signal1_discretized, signal2_discretized)
     
     def calculate_mutual_info_results(self):
-        """
-        Calculates mutual information for all unique pairs of agents to measure the dependency of their communication signals.
-        """
         results = []
         for i in range(len(self.unique_agents)):
             for j in range(i + 1, len(self.unique_agents)):
@@ -275,27 +246,11 @@ class Analysis:
                 if len(agent_i_signals) > 0 and len(agent_j_signals) > 0:
                     mi = self.calculate_mutual_information(agent_i_signals.values, agent_j_signals.values)
                     results.append({'agents': (self.unique_agents[i], self.unique_agents[j]), 'MI': mi})
-                    print(f'Mutual information between Agent {self.unique_agents[i]} and Agent {self.unique_agents[j]}: {mi:.3f}')
-
+                    #print(f'Mutual information between Agent {self.unique_agents[i]} and Agent {self.unique_agents[j]}: {mi:.3f}')
+        print(f"MI for {len(results)} pairs, succes!")
         self.mutual_info_results = results
         return results
 
-
-    # def calculate_mutual_info_results(self):
-    #     for i in range(len(self.unique_agents)):
-    #         for j in range(i + 1, len(self.unique_agents)):
-    #             agent_i_signals = self.df[self.df['AgentID'] == self.unique_agents[i]]['Communication'].values
-    #             agent_j_signals = self.df[self.df['AgentID'] == self.unique_agents[j]]['Communication'].values
-    #             # Calculate mutual information only if both agents have emitted signals
-    #             if len(agent_i_signals) > 0 and len(agent_j_signals) > 0:
-    #                 mi = self.calculate_mutual_information(agent_i_signals, agent_j_signals)
-    #                 self.mutual_info_results.append((self.unique_agents[i], self.unique_agents[j], mi))
-
-    def print_mutual_info_results(self):
-        for result in self.mutual_info_results:
-            print(f'Mutual information between Agent {result[0]} and Agent {result[1]}: {result[2]}')
-
-    
     
 
     def calculate_correlation_with_performance(self):
@@ -305,6 +260,111 @@ class Analysis:
         
         return communication_reward_correlation
                
+
+        
+    def full_analysis(self):
+        """ Conduct the full multi-layer analysis as per the structured approach. """
+        
+        self.individual_analysis()
+        
+        self.collective_analysis()
+        
+        self.analysis_across_evaluations()
+        
+        self.save_analysis_results()
+        
+    def save_analysis_results(self):
+        """ Save results in a human-readable format, with error handling for missing data. """
+        with open(os.path.join(self.output_dir, 'detailed_analysis_report.txt'), 'w') as file:
+            # Safely write individual entropy results
+            individual_results = self.results.get('individual', 'No individual analysis results available.')
+            file.write(f"Individual Entropy Results: {individual_results}\n")
+
+            # Safely write mutual information results
+            mutual_info_results = self.results.get('mutual_information', 'No mutual information results available.')
+            file.write(f"Mutual Information: {mutual_info_results}\n")
+
+            # Safely write PCA results
+            pca_results = self.results.get('PCA', 'No PCA results available.')
+            file.write(f"PCA Results: {pca_results}\n")
+
+
+    def individual_analysis(self):
+        """ Perform individual-level analysis for each agent. """
+        self.results['individual'] = {}
+        for agent_id in self.df['AgentID'].unique():
+            agent_data = self.df[self.df['AgentID'] == agent_id]
+            entropy_value = self.calculate_entropy(agent_data['Communication'])
+            correlation = agent_data['Communication'].corr(agent_data['Reward'])
+            self.results['individual'][agent_id] = {
+                'entropy': entropy_value,
+                'correlation': correlation
+            }
+
+    def collective_analysis(self):
+        """ Perform collective-level analysis over all agents. """
+        # Mutual Information
+        self.results['mutual_information'] = self.calculate_mutual_info_results()
+
+        # Clustering
+        kmeans = KMeans(n_clusters=3).fit(self.scaled_features)
+        self.df['cluster'] = kmeans.labels_
+
+        # PCA
+        pca = PCA(n_components=2)
+        pca_result = pca.fit_transform(self.scaled_features)
+        self.df['PCA1'], self.df['PCA2'] = pca_result[:, 0], pca_result[:, 1]
+        self.results['PCA'] = pca.explained_variance_ratio_
+
+
+    def analysis_across_evaluations(self):
+        """ Analyze results across 100 evaluations for a single configuration. """
+        # Assuming evaluations are somehow distinguished or aggregated in self.df
+        self.results['evaluation'] = {
+            'average_reward': self.df['Reward'].mean(),
+            'average_entropy': np.mean([self.results['individual'][aid]['entropy'] for aid in self.df['AgentID'].unique()]),
+            'average_mutual_information': self.results['mutual_information']
+        }
+
+    
+
+    def calculate_entropy(self, signals):
+        """ Calculate entropy of communication signals. """
+        hist, bin_edges = np.histogram(signals, bins=10, density=True)
+        prob_density = hist * np.diff(bin_edges)
+        return entropy(prob_density[prob_density > 0])
+    
+    
+    def plot_signal_histogram(self, plot_name='signal_histogram.png'):
+        # Extract the signal column
+        signal = self.df['Communication'].values
+        # Plot histogram
+        plt.figure(figsize=(10, 6))
+        plt.hist(signal, bins=10, density=True, alpha=0.6, color='g')
+        # Add titles and labels
+        plt.title('Histogram of Communication Signals')
+        plt.xlabel('Signal Value')
+        plt.ylabel('Probability Density')
+        # Save the histogram figure
+        plt.savefig(os.path.join(self.output_dir, plot_name))
+        plt.close()    
+        
+    def plot_cumulative_variance(self):
+        """
+        Plots the cumulative variance explained by the principal components to aid in deciding how many components to retain.
+        """
+        pca = PCA().fit(self.scaled_features)
+        plt.figure(figsize=(8, 5))
+        plt.plot(np.cumsum(pca.explained_variance_ratio_))
+        plt.xlabel('Number of Components')
+        plt.ylabel('Cumulative Explained Variance')
+        plt.title('Cumulative Explained Variance by PCA Components')
+        plt.grid(True)
+        plt.savefig(os.path.join(self.output_dir, 'cumulative_variance.png'))
+        plt.close()
+    
+    
+    
     def plot_movement_communication_scatter(self, plot_name='movement_communication_scatter_plot.png'):
         # Normalizing the Communication signal for better visualization
         from sklearn.preprocessing import MinMaxScaler
@@ -341,14 +401,6 @@ class Analysis:
         plt.savefig(os.path.join(self.output_dir, plot_name))  
         plt.close()
 
-
-    
-
-
-
-
-
-
     def plot_dbscan_results(self, plot_name='dbscan_clustering_plot.png'):
         fig, ax = plt.subplots(figsize=(10, 6))
         scatter = ax.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['DBSCAN_Cluster'], cmap='viridis', alpha=0.5)
@@ -371,27 +423,8 @@ class Analysis:
         plt.savefig(os.path.join(self.output_dir, plot_name))  
         plt.close()
 
-       
-    def perform_time_frequency_analysis(self):
-        from scipy.signal import spectrogram
-        signal = self.df['Communication'].values
-        f, t, Sxx = spectrogram(signal, fs=1)  # Assuming 1 Hz sampling rate; adjust as necessary
-        plt.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')
-        plt.ylabel('Frequency (Hz)')
-        plt.xlabel('Time (sec)')
-        plt.title('Spectrogram of Communication Signal')
-        plt.colorbar(label='Intensity (dB)')
-        plt.savefig(os.path.join(self.output_dir, 'spectrogram.png'))
-        plt.close()
-
-        
     def create_k_distance_plot(self, k=8, plot_name='k_distance_plot.png'):
-        """
-        Creates and saves a k-distance plot for choosing the 'eps' parameter in DBSCAN.
-        Args:
-        - k: Number of nearest neighbors to consider for the k-distance computation.
-        - plot_name: The name of the plot image file to save.
-        """
+    
         # Compute the k-nearest neighbor distances
         nbrs = NearestNeighbors(n_neighbors=k).fit(self.scaled_features)
         distances, indices = nbrs.kneighbors(self.scaled_features)
@@ -410,6 +443,20 @@ class Analysis:
         # Save the plot
         plt.savefig(os.path.join(self.output_dir, plot_name))
         plt.close()
+
+    def perform_time_frequency_analysis(self):
+        from scipy.signal import spectrogram
+        signal = self.df['Communication'].values
+        f, t, Sxx = spectrogram(signal, fs=1)  # Assuming 1 Hz sampling rate; adjust as necessary
+        plt.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')
+        plt.ylabel('Frequency (Hz)')
+        plt.xlabel('Time (sec)')
+        plt.title('Spectrogram of Communication Signal')
+        plt.colorbar(label='Intensity (dB)')
+        plt.savefig(os.path.join(self.output_dir, 'spectrogram.png'))
+        plt.close()
+
+    
     
 
         
