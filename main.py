@@ -23,7 +23,7 @@ from ga import GeneticHyperparamOptimizer
 from settings import env_kwargs
 import datetime
 current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") 
-evals = 1000
+evals = 1
 current_datetime = current_datetime + f"_{evals}evals"  
 
 from heurisitic_signal_policy import communication_heuristic_policy
@@ -433,9 +433,17 @@ def compare_across_configurations(all_results):
 
 
 def run_advanced_analysis(config):
-    print(f"\nRunning advanced analysis for {config['model_name']} with {config['n_pursuers']} agents...\n")
+    # Configuration details for directory and file naming
+    sensor_range_str = str(config["sensor_range"]).replace('.', 'p')  # Replace dot with 'p' for file system compatibility
+    poison_speed_str = str(config["poison_speed"]).replace('.', 'p')
+    config_suffix = f"sr{sensor_range_str}_ps{poison_speed_str}"
 
-    # Run the model evaluation for one detailed game
+    # Setup the output directory with clear naming for easy identification and comparison
+    output_dir = f"advanced_analysis_results/{current_datetime}" # /{config['model_name']}_pursuers_{config['n_pursuers']}_{config_suffix}"
+    #check if the directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
+    print(f"\nRunning advanced analysis for {config['model_name']} with {config['n_pursuers']} agents, Sensor Range: {config['sensor_range']}, Poison Speed: {config['poison_speed']}\n")
     eval_results = eval_with_model_path_run(
         env_fn=env_fn,
         model_path=config.get("model_path"),
@@ -444,36 +452,28 @@ def run_advanced_analysis(config):
         sensor_range=config.get("sensor_range"),
         poison_speed=config.get("poison_speed"),
         sensor_count=config.get("sensor_count"),
-        num_games=1,  # Reduced number of games for detailed analysis
+        num_games=evals,  # Focused analysis on a single, detailed game
         render_mode=None
     )
 
     if eval_results:
         actions = eval_results.get('actions', [])
-        output_dir = f"results/{current_datetime}/{config['model_name']}_pursuers_{config['n_pursuers']}"
-        
-        # Instantiate the Analysis class from analysis.py
         analysis = Analysis(actions, output_dir=output_dir)
 
-        # Call the specific advanced analysis methods
-        analysis.plot_hierarchical_clusters(n_clusters=5)
-        analysis.perform_time_frequency_analysis()
-        analysis.plot_signal_histogram()
-        analysis.create_k_distance_plot()
-        analysis.calculate_entropy_of_communication_signals()
+        # Perform and save each analysis with filenames reflecting the configuration details
+        analysis.apply_hierarchical_clustering()
+        analysis.plot_hierarchical_clusters(n_clusters=5, plot_name=f"hierarchical_clusters_{config_suffix}.png")
+
+        analysis.perform_time_frequency_analysis(plot_name=f"time_freq_analysis_{config_suffix}.png")
+        analysis.plot_signal_histogram(plot_name=f"signal_histogram_{config_suffix}.png")
+        analysis.create_k_distance_plot(plot_name=f"k_distance_plot_{config_suffix}.png")
 
         print(f"Completed advanced analysis for {config['model_name']} with {config['n_pursuers']} agents.")
     else:
         print("Failed to obtain results for advanced analysis.")
 
 
-advanced_configs = [
-    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6},
-    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8},
-]
 
-for config in advanced_configs:
-    run_advanced_analysis(config)
 
 
 
@@ -898,7 +898,7 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'analysis'  # Options: 'train', 'optimize', 'eval', 'eval_path', 'analysis' or 'fine_tune'
+    process_to_run = 'advanced_analysis'  # Options: 'train', 'optimize', 'eval', 'eval_path', 'analysis' or 'fine_tune'
     model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
@@ -934,12 +934,28 @@ if __name__ == "__main__":
         for axis in ax:
             axis.set_xticklabels(axis.get_xticklabels(), rotation=45, ha='right')
 
-
-
         # Adjust figure size and spacing
         fig.set_size_inches(10, 18)  # Increase the height of the figure
         fig.subplots_adjust(hspace=0.5)  # Increase the vertical spacing between subplots
 
         # Show the plot
         plt.savefig(f"results/{current_datetime}/comparison_plot.png")
+        
+    elif process_to_run == 'advanced_analysis':
+        advanced_configs = [
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.02, "poison_speed": 0.075},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.04, "poison_speed": 0.075},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.1, "poison_speed": 0.075},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.4, "poison_speed": 0.075},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.8, "poison_speed": 0.075},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.2, "poison_speed": 0.075},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.2, "poison_speed": 0.15},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.075, "sensor_count": 8},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8, "sensor_range": 0.2, "poison_speed": 0.15, "sensor_count": 8},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8, "sensor_range": 0.2, "poison_speed": 0.075, "sensor_count": 8},
+]
+        
+        for config in advanced_configs:
+            run_advanced_analysis(config)
         
