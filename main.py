@@ -5,10 +5,16 @@ import glob
 import os
 import time
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FixedLocator
 import supersuit as ss
 from stable_baselines3 import SAC, PPO
 from stable_baselines3.sac import MlpPolicy as SACMlpPolicy
 from stable_baselines3.ppo import MlpPolicy as PPOMlpPolicy
+import pandas as pd
+import seaborn as sns
+
+import pickle
+
 
 
 #from pettingzoo.sisl import waterworld_v4
@@ -16,10 +22,32 @@ import waterworld_v4
 from ga import GeneticHyperparamOptimizer
 from settings import env_kwargs
 import datetime
+current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") 
+evals = 1000
+current_datetime = current_datetime + f"_{evals}evals"  
 
 from heurisitic_signal_policy import communication_heuristic_policy
 import numpy as np
 from analysis import Analysis
+import warnings
+from combine import combine_reports
+
+
+# Filter out TensorFlow oneDNN warning:
+warnings.filterwarnings("ignore", message="oneDNN custom operations are on*")
+
+# Filter out Keras deprecation warnings:
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+
+# Filter out Scikit-learn's small bins warnings:
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn.preprocessing._discretization")
+
+# Filter out Scikit-learn's K-means FutureWarning 
+warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn.cluster._kmeans")
+
+# Filter out UserWarning for set_ticklabels()
+warnings.filterwarnings("ignore", category=UserWarning, message="set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.")
+
 
 
 MODEL_DIR = 'models'
@@ -284,212 +312,126 @@ def eval_with_model_path_run(env_fn, model_path, model_name, num_pursuers, senso
 
 
 
-def run_evaluations_and_analysis(env_fn, model_configs, num_games_per_eval):
-    overall_results = {}
-    current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    base_dir = f'analysis_data_aggregate/{current_datetime}'
-    os.makedirs(base_dir, exist_ok=True)
-    
+
+model_configs = [
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240313-111355.zip", "n_pursuers": 2},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-011623.zip", "n_pursuers": 4},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.04, "poison_speed": 0.15},
+    {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+    {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240315-171531.zip", "n_pursuers": 2},
+    {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240318-022243.zip", "n_pursuers": 4},
+    {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240314-195426.zip", "n_pursuers": 6},
+    {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240406-122632.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+    # {"model_name": "Heuristic", "model_path": None, "n_pursuers": 4},
+    # {"model_name": "Heuristic", "model_path": None, "n_pursuers": 6},
+    # {"model_name": "Heuristic", "model_path": None, "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+]
+
+def run_and_analyze_all_configs(games=100):
+    all_results = {}  
+
     for config in model_configs:
-        model_path = config['model_path']
-        model_name = config['model_name']
-        num_pursuers = config['n_pursuers']
-        sensor_range = config.get('sensor_range')
-        poison_speed = config.get('poison_speed')
-        sensor_count = config.get('sensor_count')
+        config_suffix = "M" if "sensor_range" in config else ""
+        print(" ---",
+              "\n\n",
+              f"Evaluating configuration: {config['model_name']} with {config['n_pursuers']} pursuers",
+              "\n\n",
+              "---"
+              
+              )
         
-        print(f"Evaluating {model_name} with model path: {model_path} and {num_pursuers} pursuers")
-        evaluation_results = eval_with_model_path_run(
-            env_fn, model_path, model_name, num_pursuers, sensor_range, poison_speed, sensor_count, num_games_per_eval, None
+
+
+        # Run the model evaluation
+        eval_results = eval_with_model_path_run(
+            env_fn=env_fn,
+            model_path=config.get("model_path"),
+            model_name=config["model_name"],
+            num_pursuers=config["n_pursuers"],
+            sensor_range=config.get("sensor_range"),
+            poison_speed=config.get("poison_speed"),
+            sensor_count=config.get("sensor_count"),
+            num_games=games,
+            render_mode=None
         )
         
-        if evaluation_results is None:
-            print(f"Skipping evaluation for {model_name} due to an error.")
-            continue
-        
-        # Store the evaluation results in the overall results dictionary
-        model_key = f"{model_name}_{num_pursuers}"
-        overall_results[model_key] = {'evaluation': evaluation_results}
-        
-        # Analysis is always required
-        analysis_output_dir = os.path.join(base_dir, f"{model_key}_{current_datetime}")
-        os.makedirs(analysis_output_dir, exist_ok=True)
-        actions_array = np.array(evaluation_results['actions'])
-        analysis = Analysis(actions_array, analysis_output_dir)
 
-        # Execute analysis methods
-        analysis.apply_dynamic_pca()
-        analysis.apply_pca_to_dependent_vars()
-        analysis.regression_on_principal_components()
-        analysis.apply_dbscan(eps=0.2, min_samples=2)
-        analysis.apply_hierarchical_clustering()
-        analysis.behavior_clustering()
-        mutual_results = analysis.calculate_mutual_info_results()
-        entropy_value = analysis.summarize_and_calculate_entropy(2)  
-        gee_results = analysis.apply_gee()
-        communication_reward_correlation = analysis.calculate_correlation_with_performance()
-        analysis.save_results()
+        if eval_results:
+            data = eval_results.get('actions', [])
+            avg_reward = eval_results.get('overall_avg_reward', 'Data Not Available')
 
-        # Store analysis results in the overall results dictionary
-        overall_results[model_key]['analysis'] = {
-            'dynamic_pca': analysis.pca_df.to_dict('records'),  # Convert DataFrame to list of dictionaries
-            'dbscan_clusters': analysis.dbscan.labels_.tolist(),  # Convert numpy array to list
-            'gee_results': {var: result.summary().as_text() for var, result in gee_results.items()},  # Store summary text of GEE results
-            'correlation_with_performance': communication_reward_correlation,
-            'mutual_information': mutual_results,
-            'entropy_values': entropy_value,
-        }
+            
+            config_key = f"{config['model_name']}_pursuers_{config['n_pursuers']}{config_suffix}"
+            output_dir = f"results/{current_datetime}/{config_key}"
+            
+            analysis = Analysis(data, output_dir=output_dir)
+            analysis.full_analysis()
+            
+            print(f"Analysis results for {config['model_name']} with {config['n_pursuers']} pursuers: {analysis.results['evaluation']}")
 
-    return overall_results
+            all_results[config_key] = {
+                                            'data': data,
+                                            'analysis_results': analysis.results,
+                                            'avg_reward': avg_reward
+                                        }
+        else:
+            print(f"Failed to get results for {config['model_name']} with {config['n_pursuers']} pursuers.")
 
-
-
-
-
-def aggregate_analysis_results(all_games_data):
-    """
-    Aggregates the results from all games for each model configuration.
+    combine_dir = f"results/{current_datetime}"
+    combine_reports(combine_dir)
     
-    :param all_games_data: List containing results from all games for a model.
-    :return: Dictionary with aggregated analysis results.
-    """
-    # Initialize structure for aggregated results
-    aggregated_results = {
-        'pca_and_regression': [],
-        'mutual_information': [],
-        'entropy_values': [],
-        'gee_results': [],
-        'communication_reward_correlation': [],
-        'behavioral_impacts': []
+    
+    with open('pickles/all_results.pkl', 'wb') as file:
+                pickle.dump(all_results, file)
+    
+    
+    
+    return all_results
+
+
+
+def compare_across_configurations(all_results):
+    print("Comparing configurations across all results.")
+    config_data = {
+        'Configuration': [],
+        'Average Reward': [],
+        'Average Entropy': [],
+        'Average Mutual Information': []
     }
+
+    for config, results in all_results.items():
+        config_data['Configuration'].append(config)
+        
+        # Accessing the evaluation data correctly
+        evaluation_data = results.get('analysis_results', {}).get('evaluation', {})
+        avg_reward = evaluation_data.get('average_reward')
+        avg_entropy = evaluation_data.get('average_entropy')
+        
+        # Handling the list of dictionaries for mutual information
+        avg_mutual_info_list = evaluation_data.get('average_mutual_information', [])
+        if avg_mutual_info_list and isinstance(avg_mutual_info_list, list):
+            avg_mutual_information = avg_mutual_info_list[0].get('MI') if avg_mutual_info_list else None
+        else:
+            avg_mutual_information = None
+
+        config_data['Average Reward'].append(avg_reward if avg_reward is not None else 'No data')
+        config_data['Average Entropy'].append(avg_entropy if avg_entropy is not None else 'No data')
+        config_data['Average Mutual Information'].append(avg_mutual_information if avg_mutual_information is not None else 'No data')
+
+    df = pd.DataFrame(config_data)
+    df['Configuration'] = df['Configuration'].astype('category')
+    df['Average Reward'] = pd.to_numeric(df['Average Reward'], errors='coerce')
+    df['Average Mutual Information'] = pd.to_numeric(df['Average Mutual Information'], errors='coerce')
+
     
-    # Process each game's data
-    for game_data in all_games_data:
-        analysis_data = game_data.get('analysis', {})
-
-        # Collecting PCA and regression results
-        if 'dynamic_pca' in analysis_data:
-            aggregated_results['pca_and_regression'].extend(analysis_data['dynamic_pca'])
-
-        # Collecting mutual information results
-        if 'mutual_information' in analysis_data:
-            aggregated_results['mutual_information'].extend(analysis_data['mutual_information'])
-
-        # Collecting entropy values
-        if 'entropy_values' in analysis_data:
-            aggregated_results['entropy_values'].append(analysis_data['entropy_values'])
-
-        # Collecting GEE results
-        if 'gee_results' in analysis_data:
-            aggregated_results['gee_results'].append(analysis_data['gee_results'])
-
-        # Collecting correlation results
-        if 'correlation_with_performance' in analysis_data:
-            aggregated_results['communication_reward_correlation'].append(analysis_data['correlation_with_performance'])
-
-        # Collecting behavioral impacts
-        if 'behavioral_impacts' in analysis_data:
-            aggregated_results['behavioral_impacts'].append(analysis_data['behavioral_impacts'])
-
-    # Additional processing if necessary, for example, averaging or summarizing
-    return aggregated_results
-
-
-
-
-def plot_mutual_information_heatmap(mi_data, timestamp):
-    import seaborn as sns
-    agents = sorted(set(pair for pairs in mi_data.keys() for pair in pairs))
-    mi_matrix = np.zeros((len(agents), len(agents)))
-    for (agent1, agent2), value in mi_data.items():
-        i, j = agents.index(agent1), agents.index(agent2)
-        mi_matrix[i, j] = mi_matrix[j, i] = value
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(mi_matrix, annot=True, fmt=".2f", cmap="coolwarm", xticklabels=agents, yticklabels=agents)
-    plt.title('Mutual Information Between Agents')
-    plt.savefig(f'report/MI_heatmap_{timestamp}.png')
-    plt.close()
-
-def plot_entropy_histogram(entropy_values, timestamp):
-    plt.figure(figsize=(8, 6))
-    plt.hist(entropy_values, bins=10, color='skyblue')
-    plt.title('Histogram of Entropy Values')
-    plt.xlabel('Entropy')
-    plt.ylabel('Frequency')
-    plt.savefig(f'report/Entropy_histogram_{timestamp}.png')
-    plt.close()
-
-def report_analysis_results(aggregated_results):
-    os.makedirs('report', exist_ok=True)
-    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    filename = f"report_{current_time}.txt"
-    filepath = os.path.join('report', filename)
-
-    with open(filepath, 'w') as file:
-        file.write("Aggregated Analysis Results:\n")
-        file.write("PCA and Regression:\n")
-        
-        # Here, handle pca_and_regression as a list of dictionaries
-        for pca_result in aggregated_results['pca_and_regression']:
-            for key, value in pca_result.items():
-                file.write(f"Principal Component {key}: {value}\n")
-        
-        # Handle other sections similarly, ensuring they are iterated correctly based on their data type
-        file.write("\nMutual Information:\n")
-        for mi_result in aggregated_results['mutual_information']:
-            for pair, value in mi_result.items():
-                file.write(f"Between Agents {pair[0]} and {pair[1]}: {value}\n")
-        
-        # Example of handling a list directly
-        file.write("\nEntropy:\n")
-        for entropy_value in aggregated_results['entropy_values']:
-            file.write(f"Entropy: {entropy_value}\n")
-        
-        file.write("\nGEE Results:\n")
-        for gee_result in aggregated_results['gee_results']:
-            file.write(f"GEE Result: {gee_result}\n")
-        
-        file.write("\nCommunication Signal and Reward Correlation:\n")
-        for correlation in aggregated_results['communication_reward_correlation']:
-            file.write(f"Correlation: {correlation}\n")
-        
-        file.write("\nBehavioral Impacts:\n")
-        for impact in aggregated_results['behavioral_impacts']:
-            file.write(f"Impact: {impact}\n")
     
-    print(f"Aggregated analysis results saved to {filepath}")
-
-
-
-def run_analysis():
-    model_configs = [
-        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240313-111355.zip", "n_pursuers": 2},
-        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-011623.zip", "n_pursuers": 4},
-        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6},
-        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240314-050633.zip", "n_pursuers": 6, "sensor_range": 0.04, "poison_speed": 0.15},
-        {"model_name": "PPO", "model_path": "models/train/waterworld_v4_20240405-125529.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
-        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240315-171531.zip", "n_pursuers": 2},
-        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240318-022243.zip", "n_pursuers": 4},
-        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240314-195426.zip", "n_pursuers": 6},
-        {"model_name": "SAC", "model_path": "models/train/waterworld_v4_20240406-122632.zip", "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
-        {"model_name": "Heuristic", "model_path": None, "n_pursuers": 4},
-        {"model_name": "Heuristic", "model_path": None, "n_pursuers": 6},
-        {"model_name": "Heuristic", "model_path": None, "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
-    ]
     
-    # Initialize and run the evaluations
-    evaluation_results = run_evaluations_and_analysis(env_fn, model_configs, 3)
+    return df
+
+
     
-    # Prepare to aggregate results from all games
-    all_games_data = [results for results in evaluation_results.values() if 'evaluation' in results]
-
-    # Check if all_games_data is structured correctly before proceeding
-    if not all(isinstance(game, dict) for game in all_games_data):
-        print("Error: all_games_data is not structured correctly.")
-        return
-
-    aggregated_results = aggregate_analysis_results(all_games_data)
-    report_analysis_results(aggregated_results)
+    
     
 
 
@@ -659,7 +601,7 @@ def eval_with_model_path(env_fn, model_path, model_name, num_games=100, render_m
         base_dir = 'analysis_data'
         os.makedirs(base_dir, exist_ok=True)
 
-        current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        
         analysis_output_dir = os.path.join(base_dir, current_datetime)
         os.makedirs(analysis_output_dir, exist_ok=True)
 
@@ -928,5 +870,29 @@ if __name__ == "__main__":
     elif process_to_run == 'fine_tune':
         run_fine_tune(model=model_choice, model_path=r"models\train\waterworld_v4_20240405-125529.zip")
     elif process_to_run == 'analysis':
-        run_analysis()
+        all_results = run_and_analyze_all_configs(games=evals)
+        comparative_data = compare_across_configurations(all_results)
+        comparative_data.to_csv(f'results/{current_datetime}/comparative_analysis.csv', index=False)
+        # Convert the 'Configuration' column to a category type for proper plotting
+        df = pd.read_csv(f'results/{current_datetime}/comparative_analysis.csv')
+        df['Configuration'] = df['Configuration'].astype('category')
+
+        # Generate the bar plots
+        fig, ax = plt.subplots(3, figsize=(10, 15), dpi=100)
+        sns.barplot(x='Configuration', y='Average Reward', hue='Configuration', data=df, ax=ax[0], palette='Blues', legend=False)
+        sns.barplot(x='Configuration', y='Average Entropy', hue='Configuration', data=df, ax=ax[1], palette='Greens', legend=False)
+        sns.barplot(x='Configuration', y='Average Mutual Information', hue='Configuration', data=df, ax=ax[2], palette='Oranges', legend=False)
+
+        # Adjust the x-axis labels to center them under each bar
+        for axis in ax:
+            axis.set_xticklabels(axis.get_xticklabels(), rotation=45, ha='right')
+
+
+
+        # Adjust figure size and spacing
+        fig.set_size_inches(10, 18)  # Increase the height of the figure
+        fig.subplots_adjust(hspace=0.5)  # Increase the vertical spacing between subplots
+
+        # Show the plot
+        plt.savefig(f"results/{current_datetime}/comparison_plot.png")
         
