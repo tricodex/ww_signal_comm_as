@@ -220,9 +220,13 @@ class Analysis:
         return entropy_value
     
     def apply_hierarchical_clustering(self):
+        # Ensure that scaled features are in floating-point format suitable for hierarchical clustering
+        if self.scaled_features.dtype != np.float64:
+            self.scaled_features = self.scaled_features.astype(np.float64)
+
         # More comprehensive use of hierarchical clustering
         self.linked = linkage(self.scaled_features, method='ward')
-        self.df['Hierarchical_Cluster'] = fcluster(self.linked, t=5, criterion='maxclust')
+
         
 
     def calculate_mutual_information(self, signal1, signal2):
@@ -412,16 +416,21 @@ class Analysis:
 
 
     def plot_hierarchical_clusters(self, n_clusters, plot_name='hierarchical_clustering_plot.png'):
-        from scipy.cluster.hierarchy import fcluster
-        self.df['Hierarchical_Cluster'] = fcluster(self.linked, n_clusters, criterion='maxclust')
-        plt.figure(figsize=(10, 6))
-        scatter = plt.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['Hierarchical_Cluster'], cmap='viridis', alpha=0.5)
-        plt.colorbar(scatter, label='Hierarchical Cluster')
-        plt.title(f'Hierarchical Clustering with {n_clusters} Clusters')
-        plt.xlabel('Horizontal Movement')
-        plt.ylabel('Vertical Movement')
-        plt.savefig(os.path.join(self.output_dir, plot_name))  
-        plt.close()
+        if hasattr(self, 'linked') and self.linked is not None:
+            clusters = fcluster(self.linked, t=n_clusters, criterion='maxclust')
+            self.df['Hierarchical_Cluster'] = clusters
+
+            plt.figure(figsize=(10, 6))
+            scatter = plt.scatter(self.df['Horizontal'], self.df['Vertical'], c=self.df['Hierarchical_Cluster'], cmap='viridis', alpha=0.5)
+            plt.colorbar(scatter, label='Hierarchical Cluster')
+            plt.title(f'Hierarchical Clustering with {n_clusters} Clusters')
+            plt.xlabel('Horizontal Movement')
+            plt.ylabel('Vertical Movement')
+            plt.savefig(os.path.join(self.output_dir, plot_name))
+            plt.close()
+        else:
+            print("Linkage matrix not found. Ensure that 'apply_hierarchical_clustering' is called before plotting.")
+
 
     def create_k_distance_plot(self, k=8, plot_name='k_distance_plot.png'):
     
