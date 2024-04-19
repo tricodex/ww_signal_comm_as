@@ -463,10 +463,10 @@ def run_advanced_analysis(config):
         # Perform and save each analysis with filenames reflecting the configuration details
         analysis.apply_hierarchical_clustering()
         analysis.plot_hierarchical_clusters(n_clusters=5, plot_name=f"hierarchical_clusters_{config_suffix}.png")
-
         analysis.perform_time_frequency_analysis(plot_name=f"time_freq_analysis_{config_suffix}.png")
         analysis.plot_signal_histogram(plot_name=f"signal_histogram_{config_suffix}.png")
         analysis.create_k_distance_plot(plot_name=f"k_distance_plot_{config_suffix}.png")
+
 
         print(f"Completed advanced analysis for {config['model_name']} with {config['n_pursuers']} agents.")
     else:
