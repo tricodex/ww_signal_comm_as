@@ -138,3 +138,5 @@ __pycache__/ga.cpython-311.pyc
 *.pyc
 *.txt
 /.tmp.driveupload
+*.pkl
+*.csv
