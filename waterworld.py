@@ -88,9 +88,8 @@ class raw_env(AECEnv, EzPickle):
         is_last = self._agent_selector.is_last()
         self.env.step(action, self.agent_name_mapping[agent], is_last)
         
-        # # Add communication data to the info dictionary for the current agent
-        # self.infos[agent]["communication_data"] = self.env.communication_data
-
+        # Retrieve and store the positions of pursuers in the info dictionary
+        self.infos[agent]['pursuer_position'] = self.env.get_pursuer_position(self.agent_name_mapping[agent])
 
         for r in self.rewards:
             self.rewards[r] = self.env.control_rewards[self.agent_name_mapping[r]]
