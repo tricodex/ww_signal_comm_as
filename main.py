@@ -174,6 +174,7 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
     for i in range(num_games):
         episode_rewards = {agent: 0 for agent in env.possible_agents}
         env.reset(seed=i)
+        agent_count = len(env.possible_agents)
         for agent in env.agent_iter():
             obs, reward, termination, truncation, info = env.last()
             episode_rewards[agent] += reward
@@ -182,8 +183,8 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
                 action = None
             else:
                 if model_name == "Heuristic":
-                    # action = simple_policy(obs, n_sensors, sensor_range)
-                    action = communication_heuristic_policy(obs, n_sensors, sensor_range, len(env.possible_agents))
+                    
+                    action = communication_heuristic_policy(obs, n_sensors, sensor_range, agent_count, (int(agent[-1])+1))
                 else:
                     action, _states = model.predict(obs, deterministic=True)
                     if model_name == "SAC":
@@ -286,7 +287,7 @@ def eval_with_model_path_run(env_fn, model_path, model_name, num_pursuers, senso
             else:
                 if model_name == "Heuristic":
                     n_sensors = env_kwargs.get('n_sensors')
-                    action = communication_heuristic_policy(obs, n_sensors, env_kwargs['sensor_range'], len(env.possible_agents))
+                    action = communication_heuristic_policy(obs, n_sensors, env_kwargs['sensor_range'], len(env.possible_agents), (int(agent[-1])+1))
                 else:
                     action, _states = model.predict(obs, deterministic=True)
                     
@@ -534,7 +535,7 @@ def eval_with_config(env_fn, model_path, model_name, num_pursuers, sensor_range=
             else:
                 if model_name == "Heuristic":
                     n_sensors = env_kwargs.get('n_sensors')
-                    action = communication_heuristic_policy(obs, n_sensors, env_kwargs['sensor_range'], len(env.possible_agents))
+                    action = communication_heuristic_policy(obs, n_sensors, env_kwargs['sensor_range'], len(env.possible_agents), (int(agent[-1])+1))
                 else:
                     action, _states = model.predict(obs, deterministic=True)
                     
