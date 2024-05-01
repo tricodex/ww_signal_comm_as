@@ -754,5 +754,12 @@ class WaterworldBase:
             if self.render_mode == "rgb_array"
             else None
         )
+        
+    def get_pursuer_position(self, agent_id):
+        if agent_id < 0 or agent_id >= len(self.pursuers):
+            raise ValueError("Agent ID is out of range.")
+        return self.pursuers[agent_id].position
+
+
 
 
