@@ -512,8 +512,8 @@ def create_comparison_plot():
 
 
 if __name__ == "__main__":
-    evals = 100
-    process_to_run = 'pickle'
+    evals = 1
+    process_to_run = 'analysis'
     output_dir = f"results/{current_datetime}_{evals}evals"
     
     os.makedirs(output_dir, exist_ok=True)
