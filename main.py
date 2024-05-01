@@ -131,7 +131,7 @@ def train_waterworld(env_fn, model_name, model_subdir, steps=100_000, seed=None,
             log_file.write("\n\n")
         elif model_name == "PPO":
             log_file.write("policy_kwargs_ppo:\n")
-            #log_file.write(str(policy_kwargs_ppo))
+            log_file.write(str(policy_kwargs))
             log_file.write("\n\n")
         else:
             log_file.write("No policy_kwargs found.\n")
@@ -474,7 +474,109 @@ def run_advanced_analysis(config):
 
 
 
+def eval_with_config(env_fn, model_path, model_name, num_pursuers, sensor_range=None, poison_speed=None, sensor_count=None, num_games=100, render_mode=None):
+    env_kwargs = {
+        "n_pursuers": num_pursuers,
+        "n_evaders": 6,
+        "n_poisons": 8,
+        "n_coop": 2,
+        "n_sensors": sensor_count if sensor_count is not None else 16,
+        "sensor_range": sensor_range if sensor_range is not None else 0.2,
+        "radius": 0.015,
+        "obstacle_radius": 0.055,
+        "n_obstacles": 1,
+        "obstacle_coord": [(0.5, 0.5)],
+        "pursuer_max_accel": 0.01,
+        "evader_speed": 0.01,
+        "poison_speed": poison_speed if poison_speed is not None else 0.075,
+        "poison_reward": -10,
+        "food_reward": 70.0,
+        "encounter_reward": 0.015,
+        "thrust_penalty": -0.01,
+        "local_ratio": 0.0,
+        "speed_features": True,
+        "max_cycles": 1000
+    }
+    actions = []
+    env = env_fn.env(render_mode=render_mode, **env_kwargs)
+    print(f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})")
 
+    if model_path is None:
+        if model_name == "Heuristic":
+            print(f"Proceeding with heuristic policy for {num_games} games.")
+        else:
+            print("Model path is None but model name is not 'Heuristic'.")
+            return None
+    else:
+        if not os.path.exists(model_path):
+            print("Model not found.")
+            return None
+        if model_name == "PPO":
+            model = PPO.load(model_path)
+        elif model_name == "SAC":
+            model = SAC.load(model_path)
+        else:
+            print("Invalid model name.")
+            return None
+
+    total_rewards = {agent: 0 for agent in env.possible_agents}
+    episode_avg_rewards = []
+
+    for i in range(num_games):
+        episode_rewards = {agent: 0 for agent in env.possible_agents}
+        env.reset(seed=i)
+        for agent in env.agent_iter():
+            obs, reward, termination, truncation, info = env.last()
+            episode_rewards[agent] += reward
+
+            if termination or truncation:
+                action = None
+            else:
+                if model_name == "Heuristic":
+                    n_sensors = env_kwargs.get('n_sensors')
+                    action = communication_heuristic_policy(obs, n_sensors, env_kwargs['sensor_range'], len(env.possible_agents))
+                else:
+                    action, _states = model.predict(obs, deterministic=True)
+                    
+                
+                
+                # Retrieve individual position from the info dictionary
+                position = info.get('pursuer_position', np.array([0, 0]))  # Default to [0, 0] if no data available
+
+                # Store action, individual position, reward, and agent ID as a single array for later analysis
+                actionid = np.concatenate((action, position, [reward, int(agent[-1])]))  # Ensure this matches the expected input format for Analysis
+                actions.append(actionid)
+                
+            env.step(action)
+
+        for agent in episode_rewards:
+            total_rewards[agent] += episode_rewards[agent]
+        episode_avg_rewards.append(sum(episode_rewards.values()) / len(episode_rewards))
+
+    env.close()
+
+    overall_avg_reward = sum(total_rewards.values()) / (len(total_rewards) * num_games)
+    print("Total Rewards: ", total_rewards, "over", num_games, "games")
+    print(f"Overall Avg reward: {overall_avg_reward}")
+    
+    # Define the directory and file name dynamically
+    directory = f'report/{current_datetime}'
+    filename = f'rewards_{current_datetime}_{num_pursuers}.txt'
+    path = os.path.join(directory, filename)
+
+    # Check if the directory exists; if not, create it
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    # Open the file in append mode and write content to it
+    with open(path, 'a') as file:
+        file.write(f'{model_name} with {num_pursuers} pursuers\n')
+        file.write(f'{env_kwargs}\n')
+        file.write(f"Total Rewards: {total_rewards} over {num_games} games\n")
+        file.write(f"Overall Avg reward: {overall_avg_reward}\n")
+    
+    
+    
 
 
     
@@ -824,7 +926,7 @@ def run_train(model='PPO'):
     #eval(env_fn, model, num_games=1, render_mode="human")
     
 def run_eval(model='PPO'):
-    eval(env_fn, model, num_games=1000, render_mode=None)
+    eval(env_fn, model, num_games=1, render_mode="human")
 
 def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240405-125529.zip"): # models\train\waterworld_v4_20240301-081206.zip
     eval_with_model_path(env_fn, path, model, num_games=1, render_mode=None, analysis=True)
@@ -898,8 +1000,8 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'advanced_analysis'  # Options: 'train', 'optimize', 'eval', 'eval_path', 'analysis' or 'fine_tune'
-    model_choice = 'PPO'  # Options: 'Heuristic', 'PPO', 'SAC'
+    process_to_run = 'multi_eval'  # Options: 'train', 'optimize', 'eval', 'eval_path', 'analysis' or 'fine_tune'
+    model_choice = 'Heuristic'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
         process_to_run = 'eval'
@@ -958,4 +1060,14 @@ if __name__ == "__main__":
         
         for config in advanced_configs:
             run_advanced_analysis(config)
+            
+    elif process_to_run == 'multi_eval':
+        config= [{"model_name": "Heuristic", "model_path": None, "n_pursuers": 4},
+                {"model_name": "Heuristic", "model_path": None, "n_pursuers": 6},
+                {"model_name": "Heuristic", "model_path": None, "n_pursuers": 8, "sensor_range": 0.04, "poison_speed": 0.15, "sensor_count": 8},
+                {"model_name": "Heuristic", "model_path": None, "n_pursuers": 2}]
+            
+        for config in config:
+            eval_with_config(env_fn, config.get('model_path'), config.get('model_name'), config.get('n_pursuers'), config.get('sensor_range'), config.get('poison_speed'), config.get('sensor_count'), num_games=1000, render_mode=None)
+        
         
