@@ -142,3 +142,4 @@ __pycache__/ga.cpython-311.pyc
 *.csv
 utils.ipynb
 analysis_old_signal.py
+stutils.py
