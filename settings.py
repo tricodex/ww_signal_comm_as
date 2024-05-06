@@ -54,7 +54,7 @@ env_kwargs = {
     "n_poisons": 8,
     "n_coop": 2,
     "n_sensors": 16,
-    "sensor_range": 0.04,
+    "sensor_range": 0.2,
     "radius": 0.015,
     "obstacle_radius": 0.055,
     "n_obstacles": 1,
