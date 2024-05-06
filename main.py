@@ -23,7 +23,7 @@ from ga import GeneticHyperparamOptimizer
 from settings import env_kwargs
 import datetime
 current_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") 
-evals = 1
+evals = 1000
 current_datetime = current_datetime + f"_{evals}evals"  
 
 from heurisitic_signal_policy import communication_heuristic_policy
@@ -195,11 +195,22 @@ def eval(env_fn, model_name, model_subdir=TRAIN_DIR, num_games=100, render_mode=
             total_rewards[agent] += episode_rewards[agent]
         episode_avg = sum(episode_rewards.values()) / len(episode_rewards)
         episode_avg_rewards.append(episode_avg)
+        # print("episode_rewards", episode_rewards)
+        # print("episode_avg", episode_avg)
         if i % 100 == 0:
             print(f"Rewards for episode {i}: {episode_rewards}")
-        #print(f"Rewards for episode {i}: {episode_rewards}")
+            
+        
 
     env.close()
+    
+    
+    filename = f'pickles/eval_data_for_anova/{model_name}reward_data_e{num_games}_{current_datetime}_{env_kwargs["n_pursuers"]}.pkl'
+    os.makedirs(os.path.dirname(filename), exist_ok=True)    
+    with open(filename, 'wb') as f:
+        pickle.dump(episode_avg_rewards, f)
+
+    print(f"Data saved in {filename}")
 
     overall_avg_reward = sum(total_rewards.values()) / (len(total_rewards) * num_games)
     total_avg_reward = sum(episode_avg_rewards) 
@@ -927,14 +938,14 @@ def run_train(model='PPO'):
     #eval(env_fn, model, num_games=1, render_mode="human")
     
 def run_eval(model='PPO'):
-    eval(env_fn, model, num_games=1, render_mode="human")
+    eval(env_fn, model, num_games=1000, render_mode=None)
 
-def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240405-125529.zip"): # models\train\waterworld_v4_20240301-081206.zip
-    eval_with_model_path(env_fn, path, model, num_games=1, render_mode=None, analysis=True)
+def run_eval_path(model='PPO',  path=r"models\train\waterworld_v4_20240314-050633.zip"): # models\train\waterworld_v4_20240301-081206.zip
+    eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis=False)
     #eval_with_model_path(env_fn, path, model, num_games=1, render_mode="human", analysis= False)
 
 # Add a function to execute fine-tuning
-def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-125529.zip"):
+def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240314-050633.zip"):
     episodes, episode_lengths = 20000, 1000
     total_steps = episodes * episode_lengths
     
@@ -1001,7 +1012,7 @@ def run_fine_tune(model='PPO', model_path=r"models\train\waterworld_v4_20240405-
 
 if __name__ == "__main__":
     env_fn = waterworld_v4  
-    process_to_run = 'multi_eval'  # Options: 'train', 'optimize', 'eval', 'eval_path', 'analysis' or 'fine_tune'
+    process_to_run = 'eval_path'  # Options: 'train', 'optimize', 'eval', 'eval_path', 'analysis' or 'fine_tune'
     model_choice = 'Heuristic'  # Options: 'Heuristic', 'PPO', 'SAC'
 
     if model_choice == "Heuristic":
@@ -1070,5 +1081,6 @@ if __name__ == "__main__":
             
         for config in config:
             eval_with_config(env_fn, config.get('model_path'), config.get('model_name'), config.get('n_pursuers'), config.get('sensor_range'), config.get('poison_speed'), config.get('sensor_count'), num_games=1000, render_mode=None)
-        
+    else:
+        print("No Valid")
         
