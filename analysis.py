@@ -143,6 +143,11 @@ from sklearn.cluster import SpectralClustering
 #         #                                                                     'NHighSignal', 'OtherAgentsSignalMean', 
 #         #                                                                     'OtherAgentsSignalStd']])
 
+        # #
+        # #self.df.head(30).to_csv(f"{self.output_dir}/analysis_results_snippet.csv", index=False)
+        # #self.variabels = ['Signal', 'AgentID', 'Step', 'Game'] + self.signal_cols
+        # #print(self.df.head(50)[self.variabels])
+        # print(self.df.head())
 
 class Analysis:
     def __init__(self, actions_array, output_dir, episodes):
@@ -160,13 +165,8 @@ class Analysis:
 
         os.makedirs(self.output_dir, exist_ok=True)
         
-        self.perform_analyses()
-        print(self.df.columns)
-        #
-        #self.df.head(30).to_csv(f"{self.output_dir}/analysis_results_snippet.csv", index=False)
-        #self.variabels = ['Signal', 'AgentID', 'Step', 'Game'] + self.signal_cols
-        #print(self.df.head(50)[self.variabels])
-        print(self.df.head())
+        # self.perform_analyses()
+        
 
     def initialize_features(self, episodes):
         # Total number of entries per game considering all agents
